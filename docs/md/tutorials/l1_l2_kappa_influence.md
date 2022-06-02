@@ -18,6 +18,10 @@ optimizer_kwargs = {
 gradient_kwargs = {"mu": None}
 ```
 
+#### Original Image
+
+![png](../../img/tutorials/l1_l2_kappa/original.png)
+
 ## kappa Influence
 
 ### Kappa = 2
@@ -52,10 +56,10 @@ gradient_kwargs = {"mu": None}
 
 ![Kappa_2](./../../img/tutorials/l1_l2_kappa/l2_0_0000005.png)
 
-### l1 = 0.005
+### l2 = 0.005
 
 ![Kappa_10](./../../img/tutorials/l1_l2_kappa/l2_0_005.png)
 
-### l1 = 5.0
+### l2 = 5.0
 
 ![Kappa_20](./../../img/tutorials/l1_l2_kappa/l2_5_0.png)
