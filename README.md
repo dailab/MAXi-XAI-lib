@@ -190,4 +190,4 @@ The Explanation Generator interconnects all the above mentioned components and i
 [Click here](docs/md/tutorials/explanation_model_example.md)
 
 <!-- ![Activity Diagram](docs/img/mael_activity_diagram.png) -->
-This open source project is funded by the German Federal Ministry for Economic Affairs and Climate Action as part of the EMPAIA project under Grant Agreement No. 01MK20002C.  
+This open source project is funded by the German Federal Ministry for Economic Affairs and Climate Action as part of the [EMPAIA project](https://www.empaia.org) under Grant Agreement No. 01MK20002C.  
