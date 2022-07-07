@@ -73,7 +73,16 @@ class LimeLoss(BaseExplanationModel):
                 "Got upper bound matrix of different shape than the"
                 f" input image.({self._upper.shape} != {org_img.shape})"
             )
-            
+    
+    @staticmethod
+    def _generate_binary_representation(data: np.ndarray) -> np.ndarray:
+        return np.where(data > 0, 1, 0)
+    
+    @staticmethod
+    def _get_indices_of_nonzero_entries(data: np.ndarray) -> np.ndarray:
+        return np.where(data > 0)[0]
+        # return np.where(data > 0)[0]
+    
     def _setup_locality_measure(self):
         def dist(x: np.ndarray, y: np.ndarray):
             z = x-y
@@ -87,8 +96,11 @@ class LimeLoss(BaseExplanationModel):
         self.locality_measure = lambda x, y: np.exp(-dist(x, y) ** 2 / sigma ** 2)
         
     def _setup_loss_constants(self):
+        self.binary_org_img = LimeLoss._generate_binary_representation(self.org_img)
+        self.non_zero_indices = LimeLoss._get_indices_of_nonzero_entries(self.org_img.flatten())
+        
         # set of samples
-        self.Z = self._draw_perturbations(self.org_img.shape)
+        self.Z = self._draw_perturbations()
 
         # match org img matrix with Z matrix
         squeezed_org_img = self.org_img if self.org_img.shape[0] > 1 else self.org_img.squeeze(0)
@@ -109,16 +121,32 @@ class LimeLoss(BaseExplanationModel):
         target_idx = to_numpy(self.inference(self.org_img)).argmax()
         self.pred = to_numpy(self.inference(self.org_img_plus_Z))[:, target_idx]
 
-    def _draw_perturbations(
-        self, shape: tuple, lower: float = -1.0, upper: float = 1.0
-    ) -> np.ndarray:
-        # first dimension of image should be batch number
-        batched_shape = list(shape)
-        batched_shape[0] = self.n_samples
-        batched_shape = tuple(batched_shape)
+    # def _draw_perturbations(
+    #     self, shape: tuple, lower: float = -1.0, upper: float = 1.0
+    # ) -> np.ndarray:
+    #     # first dimension of image should be batch number
+    #     batched_shape = list(shape)
+    #     batched_shape[0] = self.n_samples
+    #     batched_shape = tuple(batched_shape)
 
+    #     self.randomState = np.random.RandomState()
+    #     return self.randomState.uniform(size=batched_shape, low=lower, high=upper)
+    
+    def _draw_perturbations(self,) -> np.ndarray:
+        return np.array([self._draw_one_perturbation().squeeze(0) for _ in range(self.n_samples)])
+    
+    def _draw_one_perturbation(self,) -> np.ndarray:
         self.randomState = np.random.RandomState()
-        return self.randomState.uniform(size=batched_shape, low=lower, high=upper)
+        
+        k = self.randomState.randint(low=1, high=len(self.non_zero_indices))
+        indices = np.random.choice(self.non_zero_indices, k, replace=False)
+        indices = np.sort(indices)
+        
+        perturbation = np.zeros(self.org_img.flatten().shape, dtype=np.float64)
+        values = np.take(self.org_img.flatten(), indices)
+        np.put(perturbation, indices, values, mode="raise")
+        return perturbation.reshape(self.org_img.shape)
+        
 
     def get_loss(self, data: np.ndarray, *args, **kwargs) -> np.ndarray: 
         return (
