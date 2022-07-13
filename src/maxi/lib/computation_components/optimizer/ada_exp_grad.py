@@ -17,8 +17,6 @@ from ....utils.general import to_numpy
 
 
 class AdaExpGrad(object):
-    FEV_PER_ITER = 1
-
     def __init__(
         self,
         func: Callable[[np.ndarray], float],

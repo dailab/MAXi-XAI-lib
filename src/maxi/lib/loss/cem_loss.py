@@ -2,7 +2,7 @@
 
 __all__ = ["CEMLoss"]
 
-from typing import Callable, Tuple
+from typing import Callable, Union
 
 import numpy as np
 from numpy.linalg import norm
@@ -59,7 +59,7 @@ class CEMLoss(BaseExplanationModel):
             
         Note:
             The hardcoded lower and upper bounds in ```_init_lower_upper()``` are tailored for images with \
-            pixel range of -0.5 to 0.5. For other ranges, it is required to specify it accordingly.\
+            pixel range of [0, 1] or [0, 255]. For other ranges, it is required to specify it accordingly.\
             Otherwise it might strongly adulterate the results.
         """
         self._setup_mode(mode)
@@ -83,8 +83,8 @@ class CEMLoss(BaseExplanationModel):
 
     def _init_lower_upper(
         self,
-        lower: Tuple[None, np.ndarray],
-        upper: Tuple[None, np.ndarray],
+        lower: Union[None, np.ndarray],
+        upper: Union[None, np.ndarray],
         org_img: np.ndarray,
     ):
         DEFAULT_LB_UB = {
@@ -138,7 +138,7 @@ class CEMLoss(BaseExplanationModel):
         assert len(res) == 1, "Loss class currently does not support batched calculations"
         return np.argmax(to_numpy(res))  # index of the original prediction
 
-    def get_loss(self, data: np.ndarray) -> np.ndarray:
+    def get_loss(self, data: np.ndarray, *args, **kwargs) -> np.ndarray:
         return super().get_loss(data)
 
     def PN(self, delta: np.ndarray) -> np.ndarray:

@@ -72,7 +72,7 @@ class BaseOptimizer(ABC):
         self.call_count = self.call_count + 1
         loss, l1, l2 = (
             to_numpy(self.alg.func(y)),
-            lina.norm(y.flatten(), ord=1) * self.l1,
+            lina.norm(y.flatten(), ord=1),# * self.l1,
             (lina.norm(y.flatten(), ord=2) ** 2) * self.l2 / 2,
         )
         return OptimizeResult(
