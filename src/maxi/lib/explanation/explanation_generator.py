@@ -4,7 +4,7 @@ __all__ = ["ExplanationGenerator"]
 
 import traceback
 from collections import OrderedDict
-from typing import Any, Callable, Type, Tuple, OrderedDict, Dict, Union
+from typing import Callable, Type, Tuple, OrderedDict, Dict, Union
 
 import numpy as np
 from scipy.optimize import OptimizeResult
@@ -18,6 +18,7 @@ from ..loss.cem_loss import CEMLoss
 from ..inference.inference_wrapper import InferenceWrapper
 from ...data.data_types import MetaData
 from ...utils import logger, general
+from ...utils.superpixel_handler import SuperpixelHandler
 
 
 class ExplanationGenerator:
@@ -26,9 +27,12 @@ class ExplanationGenerator:
         loss: Type[BaseExplanationModel] = CEMLoss,
         optimizer: Type[BaseOptimizer] = AdaExpGradOptimizer,
         gradient: Type[BaseGradient] = URVGradientEstimator,
-        loss_kwargs: Dict[str, str] = {"mode": "PP", "gamma": 75, "K": 10, "AE": None},
-        optimizer_kwargs: Dict[str, str] = {"l1": 0.5, "l2": 0.5, "eta": 1.0},
-        gradient_kwargs: Dict[str, str] = {"mu": None},
+        superpixel_mode: bool = False,
+        sp_algorithm: str = "SLIC",
+        loss_kwargs: Dict[str, str] = None,
+        optimizer_kwargs: Dict[str, str] = None,
+        gradient_kwargs: Dict[str, str] = None,
+        sp_kwargs: Dict[str, str] = None,
         num_iter: int = 30,
         save_freq: int = np.inf,
         verbose: bool = False,
@@ -64,6 +68,13 @@ class ExplanationGenerator:
                 (only result of last iteration is stored).
             verbose (bool, optional): Whether loss is printed. Defaults to False.
         """
+        if loss_kwargs is None:
+            loss_kwargs = {"mode": "PP", "gamma": 75, "K": 10, "AE": None}
+        if optimizer_kwargs is None:
+            optimizer_kwargs = {"l1": 0.5, "l2": 0.5, "eta": 1.0}
+        if gradient_kwargs is None:
+            gradient_kwargs = {"mu": None}
+
         self.loss, self.optimizer, self.gradient = loss, optimizer, gradient
         self._loss_kwargs, self._optimizer_kwargs, self._gradient_kwargs = (
             loss_kwargs,
@@ -74,6 +85,12 @@ class ExplanationGenerator:
         self._num_iter = num_iter
 
         self.log_freq, self.save_freq = 1, min(save_freq, num_iter)
+
+        self._superpixel_mode, self._sp_algorithm, self._sp_kwargs = (
+            superpixel_mode,
+            sp_algorithm,
+            sp_kwargs,
+        )
 
         self.logging_cb = logger._callback
         self.verbose = verbose
@@ -92,10 +109,16 @@ class ExplanationGenerator:
         Returns:
             Tuple[BaseExplanationModel, BaseGradient, BaseOptimizer]: [description]
         """
+        if self._superpixel_mode:
+            self.superpixel_handler = SuperpixelHandler(
+                image=image, algorithm=self._sp_algorithm, sp_kwargs=self._sp_kwargs
+            )
+
         # Loss function
         loss_instance: BaseExplanationModel = self.loss(
             inference=inference_call,
             org_img=image,
+            superpixel_handler=self.superpixel_handler,
             **self._loss_kwargs,
         )
 
@@ -153,10 +176,17 @@ class ExplanationGenerator:
             #: Every ``save_freq``'th iteration, object of the optimization is saved
             #: e.g. for CEM the perturbed image will be stored
             if general.check_epoch(self.iter_count, self.save_freq, self._num_iter):
-                results[str(self.iter_count)] = opt_result.x.copy()
+                res = opt_result.x.copy()
+                results[str(self.iter_count)] = (
+                    self.superpixel_handler.generate_img_from_weight_vector(res)
+                    if self._superpixel_mode
+                    else res
+                )
 
             #: Every ``log_freq``'th iteration, the loss and l1 is logged on the terminal
-            if self.verbose and general.check_epoch(self.iter_count, self.log_freq, self._num_iter):
+            if self.verbose and general.check_epoch(
+                self.iter_count, self.log_freq, self._num_iter
+            ):
                 self.logging_cb(opt_result)
 
         return results
@@ -179,8 +209,12 @@ class ExplanationGenerator:
             Tuple[OrderedDict[str, np.ndarray], OrderedDict[str, np.ndarray], MetaData]:
                 OrderedDict containing the explanations, meta data to the explained image.
         """
-        assert type(image) is np.ndarray and type(image) is not bool, "Image is of unsupported type"
-        assert inference_call and type(inference_call) is not bool, "Inference is of None Type"
+        assert (
+            type(image) is np.ndarray and type(image) is not bool
+        ), "Image is of unsupported type"
+        assert (
+            inference_call and type(inference_call) is not bool
+        ), "Inference is of None Type"
 
         try:
             loss, gradient, optimizer = self._init_components(image, inference_call)
@@ -191,6 +225,7 @@ class ExplanationGenerator:
             exit()
 
     def __copy__(self):
+        raise NotImplementedError("Copy is not implemented")
         return type(self)(
             self.loss,
             self.optimizer,
