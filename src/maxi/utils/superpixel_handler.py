@@ -14,24 +14,28 @@ class SuperpixelHandler:
             sp_kwargs,
         )
         self.seed = self._generate_superpixel_seed(image)
-        self.label_images = SuperpixelHandler._build_label_images(image, self.seed)
+        self._label_images = SuperpixelHandler._build_label_images(image, self.seed)
+
+    @property
+    def label_images(self) -> List[np.ndarray]:
+        return self._label_images
 
     @property
     def ones_weight_vector(self) -> np.ndarray:
-        return np.ones((self.num_superpixels), dtype=np.float32)
+        return np.ones(self.num_superpixels, dtype=np.float32)
 
     @property
     def zeros_weight_vector(self) -> np.ndarray:
-        return np.zeros((self.num_superpixels), dtype=np.float32)
+        return np.zeros(self.num_superpixels, dtype=np.float32)
 
     @property
     def num_superpixels(self) -> int:
-        return self.seeds.getLabels()
+        return self.seed.getNumberOfSuperpixels()
 
     @staticmethod
     def _retrieve_sp_algorithm(
         alg_name: str,
-    ) -> Union[cv2.ximgproc.SLIC, cv2.ximgproc.SLICO, cv2.ximgproc.MSLIC]:
+    ) -> "Union[cv2.ximgproc.SLIC, cv2.ximgproc.SLICO, cv2.ximgproc.MSLIC]":
         alg_name = alg_name.upper()
         if alg_name == "SLIC":
             return cv2.ximgproc.SLIC
@@ -43,6 +47,8 @@ class SuperpixelHandler:
             raise ValueError(f"'{alg_name}' is not a valid superpixel algorithm.")
 
     def _generate_superpixel_seed(self, img: np.ndarray) -> "Cv2SuperpixelSeed":
+        assert self.sp_kwargs, "No superpixel algorithm kwargs given."
+
         img = np.expand_dims(img.squeeze(axis=0), axis=-1)
         img = transformations.rescale_image_to_0_255(img)
 
@@ -59,6 +65,9 @@ class SuperpixelHandler:
 
     @staticmethod
     def _build_label_images(img: np.ndarray, seeds) -> List[np.ndarray]:
+        def preprocess_img(img: np.ndarray):
+            return np.expand_dims(img.squeeze(0), -1)
+
         label_map, num_labels = (
             seeds.getLabels(),
             seeds.getNumberOfSuperpixels(),
@@ -69,15 +78,30 @@ class SuperpixelHandler:
         ]
 
         return [
-            cv2.bitwise_and(img, img, mask=label_maps[i]) for i in range(num_labels)
+            cv2.bitwise_and(
+                preprocess_img(img), preprocess_img(img), mask=label_maps[i]
+            )
+            for i in range(num_labels)
         ]
 
     def generate_img_from_weight_vector(self, weight_vec: np.ndarray) -> np.ndarray:
-        assert weight_vec.shape == (self.num_superpixels,), (
-            "Weight vector shape mismatch. "
-            "Needs to have the same number of entries as the number of superpixels."
-        )
-        res_img = np.zeros(self.image.shape, dtype=np.uint8)
+        assert weight_vec.shape in [
+            (self.num_superpixels,),
+            (1, self.num_superpixels),
+        ], "Weight vector shape mismatch."
+        "Needs to have the same number of entries as the number of superpixels. \n"
+        f"Got: {weight_vec.shape}, Expected: ({self.num_superpixels},)"
+
+        res_img = np.zeros(self.image.shape, dtype=np.float32)
         for i in range(self.num_superpixels):
-            res_img += weight_vec[i] * self.label_images[i]
+            weight = weight_vec[i] if weight_vec.ndim == 1 else weight_vec[0, i]
+            res_img += weight * self.label_images[i]
         return res_img
+
+    def generate_imgs_from_weight_vectors(self, weight_vecs: np.ndarray) -> np.ndarray:
+        return np.array(
+            [
+                self.generate_img_from_weight_vector(weight_vec).squeeze(axis=0)
+                for weight_vec in weight_vecs
+            ]
+        )

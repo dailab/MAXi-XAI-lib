@@ -1,14 +1,16 @@
-"""Explanation Generator"""
+"""Superpixel Explanation Generator"""
 
-__all__ = ["ExplanationGenerator"]
+__all__ = ["SuperpixelExplanationGenerator"]
 
 import traceback
 from collections import OrderedDict
-from typing import Callable, Type, Tuple, OrderedDict, Dict, Union
+from typing import Any, Callable, List, Type, Tuple, OrderedDict, Dict, Union
 
+import cv2
 import numpy as np
 from scipy.optimize import OptimizeResult
 
+from .explanation_generator import ExplanationGenerator
 from ..computation_components.gradient.gradient_estimator import URVGradientEstimator
 from ..computation_components.gradient.base_gradient import BaseGradient
 from ..computation_components.optimizer.base_optimizer import BaseOptimizer
@@ -17,11 +19,10 @@ from ..loss.base_explanation_model import BaseExplanationModel
 from ..loss.cem_loss import CEMLoss
 from ..inference.inference_wrapper import InferenceWrapper
 from ...data.data_types import MetaData
-from ...utils import logger, general
-from ...utils.superpixel_handler import SuperpixelHandler
+from ...utils import logger, general, transformations
 
 
-class ExplanationGenerator:
+class SuperpixelExplanationGenerator(ExplanationGenerator):
     def __init__(
         self,
         loss: Type[BaseExplanationModel] = CEMLoss,
@@ -68,32 +69,61 @@ class ExplanationGenerator:
                 (only result of last iteration is stored).
             verbose (bool, optional): Whether loss is printed. Defaults to False.
         """
-        if loss_kwargs is None:
-            loss_kwargs = {"mode": "PP", "gamma": 75, "K": 10, "AE": None}
-        if optimizer_kwargs is None:
-            optimizer_kwargs = {"l1": 0.5, "l2": 0.5, "eta": 1.0}
-        if gradient_kwargs is None:
-            gradient_kwargs = {"mu": None}
-
-        self.loss, self.optimizer, self.gradient = loss, optimizer, gradient
-        self._loss_kwargs, self._optimizer_kwargs, self._gradient_kwargs = (
+        super().__init__(
+            loss,
+            optimizer,
+            gradient,
             loss_kwargs,
             optimizer_kwargs,
             gradient_kwargs,
+            num_iter,
+            save_freq,
+            verbose,
         )
-        self.iter_count = 0
-        self._num_iter = num_iter
-
-        self.log_freq, self.save_freq = 1, min(save_freq, num_iter)
-
-        self._superpixel_mode, self._sp_algorithm, self._sp_kwargs = (
-            superpixel_mode,
-            sp_algorithm,
+        self.sp_algorithm, self.sp_kwargs = (
+            SuperpixelExplanationGenerator._retrieve_sp_algorithm(sp_algorithm),
             sp_kwargs,
         )
 
-        self.logging_cb = logger._callback
-        self.verbose = verbose
+    @staticmethod
+    def _retrieve_sp_algorithm(
+        alg_name: str,
+    ) -> Union[cv2.ximgproc.SLIC, cv2.ximgproc.SLICO, cv2.ximgproc.MSLIC]:
+        alg_name = alg_name.upper()
+        if alg_name == "SLIC":
+            return cv2.ximgproc.SLIC
+        elif alg_name == "SLICO":
+            return cv2.ximgproc.SLICO
+        elif alg_name == "MSLIC":
+            return cv2.ximgproc.MSLIC
+        else:
+            raise ValueError(f"'{alg_name}' is not a valid superpixel algorithm.")
+
+    def _generate_superpixel_seed(self, img: np.ndarray) -> "Cv2SuperpixelSeed":
+        img = np.expand_dims(img.squeeze(axis=0), axis=-1)
+        img = transformations.rescale_image_to_0_255(img)
+
+        seeds = cv2.ximgproc.createSuperpixelSLIC(
+            img, algorithm=cv2.ximgproc.MSLIC, region_size=2, ruler=200
+        )
+        seeds.iterate(self.sp_kwargs["num_iterations"])
+        self.seed = seeds
+        return seeds
+
+    def _build_label_images(self, img: np.ndarray) -> List[np.ndarray]:
+        label_map, num_labels = (
+            self.seeds.getLabels(),
+            self.seeds.getNumberOfSuperpixels(),
+        )
+
+        label_maps = [
+            np.where(label_map == i, 1, 0).astype(np.uint8) for i in range(num_labels)
+        ]
+
+        self.label_images = [
+            cv2.bitwise_and(img, img, mask=label_maps[i]) for i in range(num_labels)
+        ]
+        return self.label_images
 
     def _init_components(
         self,
@@ -109,16 +139,13 @@ class ExplanationGenerator:
         Returns:
             Tuple[BaseExplanationModel, BaseGradient, BaseOptimizer]: [description]
         """
-        if self._superpixel_mode:
-            self.superpixel_handler = SuperpixelHandler(
-                image=image, sp_algorithm=self._sp_algorithm, sp_kwargs=self._sp_kwargs
-            )
+        self._generate_superpixel_seed(image)
+        self._build_label_images(image)
 
         # Loss function
         loss_instance: BaseExplanationModel = self.loss(
             inference=inference_call,
             org_img=image,
-            superpixel_handler=self.superpixel_handler,
             **self._loss_kwargs,
         )
 
@@ -126,12 +153,8 @@ class ExplanationGenerator:
         gradient_instance: BaseGradient = self.gradient(
             loss=loss_instance,
             img_size=image.size,
-            superpixel_mode=self._superpixel_mode,
             **self._gradient_kwargs,
         )
-
-        if self._superpixel_mode:
-            image = self.superpixel_handler.ones_weight_vector
 
         # Optimization
         optimizer_instance: BaseOptimizer = self.optimizer(
@@ -180,12 +203,7 @@ class ExplanationGenerator:
             #: Every ``save_freq``'th iteration, object of the optimization is saved
             #: e.g. for CEM the perturbed image will be stored
             if general.check_epoch(self.iter_count, self.save_freq, self._num_iter):
-                res = opt_result.x.copy()
-                results[str(self.iter_count)] = (
-                    self.superpixel_handler.generate_img_from_weight_vector(res)
-                    if self._superpixel_mode
-                    else res
-                )
+                results[str(self.iter_count)] = opt_result.x.copy()
 
             #: Every ``log_freq``'th iteration, the loss and l1 is logged on the terminal
             if self.verbose and general.check_epoch(
@@ -195,49 +213,54 @@ class ExplanationGenerator:
 
         return results
 
-    def run(
-        self,
-        image: np.ndarray,
-        inference_call: Union[Callable[[np.ndarray], np.ndarray], InferenceWrapper],
-        meta_data: MetaData = None,
-    ) -> Tuple[OrderedDict[str, np.ndarray], MetaData]:
-        """Method for starting the explanation procedure
-
-        Args:
-            image (np.ndarray): Image to be explained in [width, height, channels].
-            inference_call (Union[Callable[[np.ndarray], np.ndarray], InferenceWrapper]): Inference method returning explanation model \
-                compatible predictions. The prediction result needs to be a 2D array.
-            meta_data (MetaData, optional): Image meta data. Defaults to None.
-
-        Returns:
-            Tuple[OrderedDict[str, np.ndarray], OrderedDict[str, np.ndarray], MetaData]:
-                OrderedDict containing the explanations, meta data to the explained image.
-        """
-        assert (
-            type(image) is np.ndarray and type(image) is not bool
-        ), "Image is of unsupported type"
-        assert (
-            inference_call and type(inference_call) is not bool
-        ), "Inference is of None Type"
-
-        try:
-            loss, gradient, optimizer = self._init_components(image, inference_call)
-            return self._explain(optimizer), meta_data
-        except Exception as exc:
-            print(f"An exception occured: \n {exc}")
-            traceback.print_exc()
-            exit()
-
     def __copy__(self):
-        raise NotImplementedError("Copy is not implemented")
-        return type(self)(
-            self.loss,
-            self.optimizer,
-            self.gradient,
-            self._loss_kwargs,
-            self._optimizer_kwargs,
-            self._gradient_kwargs,
-            self._num_iter,
-            self.save_freq,
-            self.verbose,
+        raise NotImplementedError("Copy is not yet implemented for this class.")
+
+
+class SuperpixelHandler:
+    def __init__(self, image: np.ndarray, sp_algorithm: str, sp_kwargs: dict) -> None:
+        self.image = image
+        self.sp_algorithm, self.sp_kwargs = (
+            SuperpixelExplanationGenerator._retrieve_sp_algorithm(sp_algorithm),
+            sp_kwargs,
         )
+
+    @staticmethod
+    def _retrieve_sp_algorithm(
+        alg_name: str,
+    ) -> Union[cv2.ximgproc.SLIC, cv2.ximgproc.SLICO, cv2.ximgproc.MSLIC]:
+        alg_name = alg_name.upper()
+        if alg_name == "SLIC":
+            return cv2.ximgproc.SLIC
+        elif alg_name == "SLICO":
+            return cv2.ximgproc.SLICO
+        elif alg_name == "MSLIC":
+            return cv2.ximgproc.MSLIC
+        else:
+            raise ValueError(f"'{alg_name}' is not a valid superpixel algorithm.")
+
+    def _generate_superpixel_seed(self, img: np.ndarray) -> "Cv2SuperpixelSeed":
+        img = np.expand_dims(img.squeeze(axis=0), axis=-1)
+        img = transformations.rescale_image_to_0_255(img)
+
+        seeds = cv2.ximgproc.createSuperpixelSLIC(
+            img, algorithm=cv2.ximgproc.MSLIC, region_size=2, ruler=200
+        )
+        seeds.iterate(self.sp_kwargs["num_iterations"])
+        self.seed = seeds
+        return seeds
+
+    def _build_label_images(self, img: np.ndarray) -> List[np.ndarray]:
+        label_map, num_labels = (
+            self.seeds.getLabels(),
+            self.seeds.getNumberOfSuperpixels(),
+        )
+
+        label_maps = [
+            np.where(label_map == i, 1, 0).astype(np.uint8) for i in range(num_labels)
+        ]
+
+        self.label_images = [
+            cv2.bitwise_and(img, img, mask=label_maps[i]) for i in range(num_labels)
+        ]
+        return self.label_images
