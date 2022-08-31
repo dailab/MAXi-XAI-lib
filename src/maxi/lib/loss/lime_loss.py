@@ -24,6 +24,7 @@ class LimeLoss(BaseExplanationModel):
         USRVGradientEstimator,
     ]
     _x0_generator = lambda x: np.full(x.shape, 0)
+    # _x0_generator = lambda x: x
 
     def __init__(
         self,
