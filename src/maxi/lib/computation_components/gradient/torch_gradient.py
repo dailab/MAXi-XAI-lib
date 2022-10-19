@@ -10,11 +10,19 @@ from ...loss.base_explanation_model import BaseExplanationModel
 
 
 class Torch_Gradient(BaseGradient):
-    def __init__(self, loss: BaseExplanationModel, *args, **kwargs):
+    def __init__(
+        self, loss: BaseExplanationModel, device: str = "cpu", *args, **kwargs
+    ):
         super().__init__(loss)
+        self.device = device
 
     def __call__(self, data: np.ndarray) -> np.ndarray:
-        torch_data = torch.tensor(data, dtype=torch.float32, requires_grad=True)
+        torch_data = torch.tensor(
+            data,
+            dtype=torch.float32,
+            requires_grad=True,
+            device=torch.device(self.device),
+        )
 
         loss = self.loss.get_loss(torch_data)
         loss.backward()
