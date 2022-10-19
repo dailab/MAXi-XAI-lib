@@ -33,6 +33,8 @@ class CEMLoss(BaseExplanationModel):
         lower: np.ndarray = None,
         upper: np.ndarray = None,
         channels_first: bool = False,
+        *args,
+        **kwargs,
     ):
         """ Loss function of the Contrastive-Explanation-Method
 
@@ -42,7 +44,7 @@ class CEMLoss(BaseExplanationModel):
 
         Args:
             mode (str): Chose between "PP" for _pertinent positive_ / "PN" for _pertinent negative_.
-            org_img (ndarray): Original image [width, height, channels]
+            org_img (ndarray): Original image [width, height, channels] or [channels, width, height].
             inference (InferenceCall): Inference method of an external prediction entity. Has to return an \
                 interpretable representation of the underlying prediction, e.g. a binary vector indicating \
                 the “presence” or “absence”.
@@ -51,9 +53,9 @@ class CEMLoss(BaseExplanationModel):
             K (float, optional): Confidence parameter for seperation between probability of target and non-target value.
             AE (Callable[[ndarray], ndarray]): Autoencoder, if None disregard AE error term.
             lower (np.ndarray, optional): Lower bound for the optimization. Has to be of the same shape as the \
-                target image.
+                target image. Defaults to None.
             upper (np.ndarray, optional): Upper bound for the optimization. Has to be of the same shape as the \
-                target image.
+                target image. Defaults to None.
             channels_first (bool, optional): Whether the channels dimension comes before the width and height \
                 dimensions as in [bs, channels, width, height].
             
@@ -94,16 +96,21 @@ class CEMLoss(BaseExplanationModel):
                 "upper": to_numpy(org_img),
             },
             "PN": {
-                "lower": np.full(org_img.shape, 0.0),
-                "upper": 1.0 - to_numpy(org_img),
+                "lower": np.full(org_img.shape, -1.0),
+                # "upper": 1.0 - to_numpy(org_img),
+                "upper": np.full(org_img.shape, 1.0),
             },
         }
 
         self._lower = DEFAULT_LB_UB[self.mode]["lower"] if lower is None else lower
         self._upper = DEFAULT_LB_UB[self.mode]["upper"] if upper is None else upper
 
-        assert type(self._lower) is np.ndarray, "Invalid lower bound given for optimization"
-        assert type(self._upper) is np.ndarray, "Invalid upper bound given for optimization"
+        assert (
+            type(self._lower) is np.ndarray
+        ), "Invalid lower bound given for optimization"
+        assert (
+            type(self._upper) is np.ndarray
+        ), "Invalid upper bound given for optimization"
 
         if self._lower.shape != org_img.shape:
             raise ValueError(
@@ -120,7 +127,9 @@ class CEMLoss(BaseExplanationModel):
         self.mode = input.upper()
 
         self.get_loss, self._x0_generator = (
-            (self.PP, CEMLoss.pp_x0_generator) if self.mode == "PP" else (self.PN, CEMLoss.pn_x0_generator)
+            (self.PP, CEMLoss.pp_x0_generator)
+            if self.mode == "PP"
+            else (self.PN, CEMLoss.pn_x0_generator)
         )
 
     def get_target_idx(self, org_img: np.ndarray) -> int:
@@ -135,7 +144,9 @@ class CEMLoss(BaseExplanationModel):
         res = self.inference(org_img)
         assert res.ndim == 2, "Inference result has to be an one dimensional array"
         assert len(res[0]) >= 2, "Inference result has to represent at least two states"
-        assert len(res) == 1, "Loss class currently does not support batched calculations"
+        assert (
+            len(res) == 1
+        ), "Loss class currently does not support batched calculations"
         return np.argmax(to_numpy(res))  # index of the original prediction
 
     def get_loss(self, data: np.ndarray, *args, **kwargs) -> np.ndarray:

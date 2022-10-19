@@ -23,7 +23,8 @@ class BaseExplanationModel(ABC):
 
         Description:
             The explanation models have to be implemented as a loss function. This class provides \
-            the essential interface for loss functions.
+            the essential interface for loss functions. For the loss functions compatible gradient \
+            methods need to be specified in the ```compatible_grad_methods``` attribute.
 
         Args:
             org_img (np.ndarray): Original target image in [width, height, channels].

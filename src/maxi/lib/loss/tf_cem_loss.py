@@ -23,6 +23,8 @@ class TF_CEMLoss(CEMLoss):
         lower: np.ndarray = None,
         upper: np.ndarray = None,
         channels_first: bool = False,
+        *args,
+        **kwargs,
     ) -> None:
         """ TensoFlow Loss function of the Contrastive-Explanation-Method
 
@@ -78,7 +80,9 @@ class TF_CEMLoss(CEMLoss):
         res = self.inference(org_img)
         assert res.ndim == 2, "Inference result has to be a two dimensional array"
         assert len(res[0]) >= 2, "Inference result has to represent at least two states"
-        assert len(res) == 1, "Loss class currently does not support batched calculations"
+        assert (
+            len(res) == 1
+        ), "Loss class currently does not support batched calculations"
         return tf.cast(tf.argmax(res, axis=-1), tf.int32)
 
     def PN(self, delta: np.ndarray) -> tf.Tensor:
@@ -155,7 +159,12 @@ class TF_CEMLoss(CEMLoss):
         if not self.AE:
             return 0.0
         adv_img = self.org_img + delta
-        return tf.norm(tf.norm(adv_img - self.AE(adv_img), axis=self._c_dim), axis=[-2, -1]) ** 2
+        return (
+            tf.norm(
+                tf.norm(adv_img - self.AE(adv_img), axis=self._c_dim), axis=[-2, -1]
+            )
+            ** 2
+        )
 
     def PP_AE_error(self, delta: tf.Tensor) -> tf.Tensor:
         """Autoencoder error term for the pertinent positive
@@ -168,4 +177,7 @@ class TF_CEMLoss(CEMLoss):
         """
         if not self.AE:
             return 0.0
-        return tf.norm(tf.norm(delta - self.AE(delta), axis=self._c_dim), axis=[-2, -1]) ** 2
+        return (
+            tf.norm(tf.norm(delta - self.AE(delta), axis=self._c_dim), axis=[-2, -1])
+            ** 2
+        )
