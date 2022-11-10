@@ -13,6 +13,12 @@ class Torch_Gradient(BaseGradient):
     def __init__(
         self, loss: BaseExplanationModel, device: str = "cpu", *args, **kwargs
     ):
+        """Torch Gradient Calculation
+
+        Args:
+            loss (BaseExplanationModel): Loss Class. Is parsed by the explanation generator.
+            device (str, optional): Computation device. Defaults to "cpu".
+        """
         super().__init__(loss)
         self.device = device
 

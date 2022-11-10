@@ -18,12 +18,14 @@ class Torch_CEMLoss(CEMLoss):
         org_img: np.ndarray,
         inference: InferenceCall,
         gamma: float,
-        K: float,
+        K: float = 1.0,
         c: float = 1.0,
         AE: Callable[[np.ndarray], np.ndarray] = None,
         lower: np.ndarray = None,
         upper: np.ndarray = None,
         channels_first: bool = False,
+        *args,
+        **kwargs
     ) -> None:
         """ PyTorch Loss function of the Contrastive-Explanation-Method
 
@@ -55,7 +57,7 @@ class Torch_CEMLoss(CEMLoss):
         self.compatible_grad_methods += [Torch_Gradient]
         super().__init__(
             mode=mode,
-            org_img=org_img,
+            org_img=torch.tensor(org_img, dtype=torch.float32),
             inference=inference,
             c=torch.tensor(c, dtype=torch.float32),
             gamma=torch.tensor(gamma, dtype=torch.float32),
@@ -78,11 +80,13 @@ class Torch_CEMLoss(CEMLoss):
         res = self.inference(org_img)
         assert res.ndim == 2, "Inference result has to be a two dimensional array"
         assert len(res[0]) >= 2, "Inference result has to represent at least two states"
-        assert len(res) == 1, "Loss class currently does not support batched calculations"
+        assert (
+            len(res) == 1
+        ), "Loss class currently does not support batched calculations"
         return torch.argmax(res) if type(res) is torch.Tensor else np.argmax(res)
 
     def PN(self, delta: np.ndarray) -> torch.Tensor:
-        """_Pertinent negative_ loss function
+        """_Pertinent negative_ Loss Function
 
         Args:
             delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
@@ -90,10 +94,10 @@ class Torch_CEMLoss(CEMLoss):
         Returns:
             torch.Tensor: PN loss value(s), 2D tensor of shape (bs, 1).
         """
-        return self.c * self.f_K_neg(delta) + self.gamma * self.PN_AE_error(delta)
+        return super().PN(delta)
 
     def PP(self, delta: np.ndarray) -> torch.Tensor:
-        """Pertinent Positive loss function
+        """_Pertinent Positive_ Loss Function
 
         Args:
             delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
@@ -101,7 +105,29 @@ class Torch_CEMLoss(CEMLoss):
         Returns:
             torch.Tensor: PP loss value(s), 2D tensor of shape (bs, 1).
         """
-        return self.c * self.f_K_pos(delta) + self.gamma * self.PP_AE_error(delta)
+        return super().PP(delta)
+
+    def PN_smooth(self, delta: np.ndarray) -> torch.Tensor:
+        """_Smooth Pertinent Negative_ Loss Function
+
+        Args:
+            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            torch.Tensor: PN loss value(s), 2D tensor of shape (bs, 1).
+        """
+        return super().PN_smooth(delta)
+
+    def PP_smooth(self, delta: np.ndarray) -> torch.Tensor:
+        """_Smooth Pertinent Positive_ Loss Function
+
+        Args:
+            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            torch.Tensor: PP loss value(s), 2D tensor of shape (bs, 1).
+        """
+        return super().PP_smooth(delta)
 
     def f_K_neg(self, delta: torch.Tensor) -> torch.Tensor:
         """f_K term for the pertinent negative
@@ -135,6 +161,44 @@ class Torch_CEMLoss(CEMLoss):
             -self.K,
         )
 
+    def f_K_neg_smooth(self, delta: torch.Tensor) -> torch.Tensor:
+        """f_K term for the smooth pertinent negative
+
+        Args:
+            delta (torch.Tensor): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            torch.Tensor: negative f_K term loss value, 2D tensor of shape (bs, 1).
+        """
+        pred = self.inference(self.org_img + delta)
+        attack_value = loss_utils.torch_extract_target_proba(
+            pred, self.target
+        ) - loss_utils.torch_extract_nontarget_proba(pred, self.target)
+
+        if attack_value < -10:
+            return torch.log(1.0 + torch.exp(attack_value))
+        else:
+            return attack_value + torch.log(1.0 + torch.exp(-attack_value))
+
+    def f_K_pos_smooth(self, delta: torch.Tensor) -> torch.Tensor:
+        """f_K term for the pertinent positive
+
+        Args:
+            delta (torch.Tensor): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            torch.Tensor: positive f_K term loss value, 2D tensor of shape (bs, 1).
+        """
+        pred = self.inference(delta)
+        attack_value = loss_utils.torch_extract_nontarget_proba(
+            pred, self.target
+        ) - loss_utils.torch_extract_target_proba(pred, self.target)
+
+        if attack_value < -10:
+            return torch.log(1.0 + torch.exp(attack_value))
+        else:
+            return attack_value + torch.log(1.0 + torch.exp(-attack_value))
+
     def PN_AE_error(self, delta: torch.Tensor) -> torch.Tensor:
         """Autoencoder error term for the Pertinent Negative
 
@@ -147,7 +211,9 @@ class Torch_CEMLoss(CEMLoss):
         if not self.AE:
             return 0.0
         adv_img = self.org_img + delta
-        return norm(norm(adv_img - self.AE(adv_img), axis=self._c_dim), axis=(-2, -1)) ** 2
+        return (
+            norm(norm(adv_img - self.AE(adv_img), axis=self._c_dim), axis=(-2, -1)) ** 2
+        )
 
     def PP_AE_error(self, delta: torch.Tensor) -> torch.Tensor:
         """Autoencoder error term for the Pertinent Positive
