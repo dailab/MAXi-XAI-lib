@@ -44,3 +44,6 @@ def intensify_pixels(image: np.ndarray, max_value: int = 255) -> np.ndarray:
     reduced_min = reduced_mean - reduced_mean.min()
     divided_max = reduced_min / reduced_min.max()
     return divided_max * max_value
+
+def rescale_image_to_0_255(arr):
+    return ((arr - arr.min()) * (1/(arr.max() - arr.min()) * 255)).astype('uint8')

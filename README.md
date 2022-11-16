@@ -27,6 +27,7 @@ For developers, it is suggested that you take a look at the Python documentation
     - [General Tutorials](#general-tutorials)
       - [Minimal Effort Example with CEM on MNIST](#minimal-effort-example-with-cem-on-mnist)
         - [Extension: Example _AsyncExplanationWrapper_ Usage](#extension-example-asyncexplanationwrapper-usage)
+      - [CEM PP/PN-Smooth Demonstration](#cem-pppn-smooth-demonstration)
       - [l1-, l2- and kappa- Influence on Explanations](#l1--l2--and-kappa--influence-on-explanations)
     - [Computation Component Tutorials](#computation-component-tutorials)
       - [Example: _Optimizer_ Implementation](#example-optimizer-implementation)
@@ -158,6 +159,10 @@ The Explanation Generator interconnects all the above mentioned components and i
 ##### Extension: Example _AsyncExplanationWrapper_ Usage
 
 [Click here](docs/md/tutorials/async_explanation_example.md)
+
+#### CEM PP/PN-Smooth Demonstration
+
+[Click here](docs/md/tutorials/cem_pp_pn_smooth_example.md)
 
 #### l1-, l2- and kappa- Influence on Explanations
 

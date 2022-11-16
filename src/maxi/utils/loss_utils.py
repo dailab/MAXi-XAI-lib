@@ -143,7 +143,9 @@ def tf_extract_nontarget_proba(P: tf.Tensor, t: int) -> tf.Tensor:
     return tf.squeeze(tf.math.top_k(P_wo_target, 1)[0], axis=1)
 
 
-def torch_extract_prob(P: Tuple[torch.Tensor, np.ndarray], t: int, non_target: bool) -> float:
+def torch_extract_prob(
+    P: Tuple[torch.Tensor, np.ndarray], t: int, non_target: bool
+) -> float:
     """PyTorch method to extract the targets predicted value or the next highest value
 
     Args:
@@ -219,3 +221,7 @@ def torch_extract_nontarget_proba(P: torch.Tensor, t: int) -> torch.Tensor:
     for i in range(len(P)):
         prob_vector[i] = torch_extract_nontarget_proba(P[i], t)
     return prob_vector
+
+
+def generate_from_gaussian(data: np.ndarray) -> np.ndarray:
+    return np.random.normal(loc=0.0, scale=1, size=data.shape)

@@ -60,7 +60,7 @@ plt.imshow(inputs.squeeze(axis=0), cmap="gray", vmin=-0.0, vmax=1.0)
 
 ![png](./../../img/tutorials/min_effort_mnist/output_9_1.png)
 
-1. **Chose your desired component classes for the optimization (loss, optimizer and gradient). Then, specify the configuration of the components**:
+4. **Chose your desired component classes for the optimization (loss, optimizer and gradient). Then, specify the configuration of the components**:
 
 ```python
 loss_class = maxi.loss.TF_CEMLoss
