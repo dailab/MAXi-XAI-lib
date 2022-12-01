@@ -50,7 +50,7 @@ For installation, it is necessary to have the package manager _Poetry_ and _Pyth
 2. Clone the repository:
 
 ```bash
-git clone https://gitlab.dai-labor.de/empaia/constrastive-explaination-prototype.git
+https://github.com/dailab/MAXi-XAI-lib.git
 ```
 
 3. Now, either install the package in an exclusive python environment:
