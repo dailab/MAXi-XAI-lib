@@ -1,11 +1,18 @@
-from typing import List, Union
+from typing import List
+from maxi.utils.superpixel_handler import SuperpixelHandler
 
-import cv2
+# import the necessary packages
+from skimage.feature import peak_local_max
+from skimage.morphology import watershed
+from scipy import ndimage
 import numpy as np
+import cv2
 
 
-class SuperpixelHandler:
-    def __init__(self, image: np.ndarray, sp_algorithm: str, sp_kwargs: dict) -> None:
+class SegmentationHandler(SuperpixelHandler):
+    def __init__(
+        self, image: np.ndarray, sg_kwargs: dict = None, *args, **kwargs
+    ) -> None:
         """SuperpixelHandler class to handle superpixel generation.
 
         Description:
@@ -19,44 +26,36 @@ class SuperpixelHandler:
         """
         self.image = image
         # Currently only MSLIC is supported (hardcoded in _generate_superpixel_seed)
-        self.sp_algorithm, self.sp_kwargs = (
-            SuperpixelHandler._retrieve_sp_algorithm(sp_algorithm),
-            sp_kwargs,
-        )
-        self.adj_image = SuperpixelHandler.adjust_image_shape(image)
-        self.seed = self._generate_superpixel_seed(self.adj_image)
-        self._label_images = SuperpixelHandler._build_label_images(
-            self.adj_image, self.seed
-        )
+        if not sg_kwargs:
+            sg_kwargs = {
+                "mean_shifting_spatial_radius": 14,
+                "mean_shifting_color_radius": 32,
+                "peak_local_max_min_dist": 20,
+                "invert": True,
+            }
+        self.segmentation_kwargs = sg_kwargs
+        self.adj_image = SegmentationHandler.adjust_image_shape(image)
+        self._label_images = self._build_label_images(self.adj_image)
         self._readjusted_label_images = self.get_readjusted_labelimages()
 
     @property
-    def label_images(self) -> List[np.ndarray]:
-        return self._label_images
-
-    @property
-    def ones_weight_vector(self) -> np.ndarray:
-        return np.ones(self.num_superpixels, dtype=np.float32)
-
-    @property
-    def zeros_weight_vector(self) -> np.ndarray:
-        return np.zeros(self.num_superpixels, dtype=np.float32)
-
-    @property
     def num_superpixels(self) -> int:
-        return self.seed.getNumberOfSuperpixels()
+        return self._num_superpixels
 
     @staticmethod
     def adjust_image_shape(image: np.ndarray) -> np.ndarray:
-        # Image has to be channels-last and 3D
+        if image.ndim not in [2, 3, 4]:
+            raise ValueError("Image has to be 2D, 3D or 4D.")
+
+        # Image has to be channels-first and 3D
         if image.ndim == 2:
             image = np.expand_dims(image, axis=-1)
 
         if image.ndim == 4:
             image = image.squeeze(axis=0)
 
-        if image.shape[0] in [1, 3]:
-            image = image.transpose(1, 2, 0)
+        if image.shape[2] in [1, 3]:
+            image = image.transpose(2, 0, 1)
         return image
 
     def get_readjusted_labelimages(self) -> np.ndarray:
@@ -91,15 +90,7 @@ class SuperpixelHandler:
             Union[cv2.ximgproc.SLIC, cv2.ximgproc.SLICO, cv2.ximgproc.MSLIC]:
                 CV2 superpixel algorithm class.
         """
-        alg_name = alg_name.upper()
-        if alg_name == "SLIC":
-            return cv2.ximgproc.SLIC
-        elif alg_name == "SLICO":
-            return cv2.ximgproc.SLICO
-        elif alg_name == "MSLIC":
-            return cv2.ximgproc.MSLIC
-        else:
-            raise ValueError(f"'{alg_name}' is not a valid superpixel algorithm.")
+        raise NotImplementedError("SegmentationHandler does not require this method.")
 
     def _generate_superpixel_seed(self, img: np.ndarray) -> "Cv2SuperpixelSeed":
         """Generates the superpixel seed.
@@ -110,24 +101,9 @@ class SuperpixelHandler:
         Returns:
             Cv2SuperpixelSeed: Superpixel seed object.
         """
-        assert self.sp_kwargs, "No superpixel algorithm kwargs given."
-        # img = transformations.rescale_image_to_0_255(img)
+        raise NotImplementedError("SegmentationHandler does not require this method.")
 
-        num_iterations = self.sp_kwargs.get("num_iterations", 25)
-        sp_kwargs_copy = self.sp_kwargs.copy()
-        if "num_iterations" in sp_kwargs_copy:
-            del sp_kwargs_copy["num_iterations"]
-
-        seeds = cv2.ximgproc.createSuperpixelSLIC(
-            img, algorithm=self.sp_algorithm, **sp_kwargs_copy
-        )
-        seeds.iterate(num_iterations)
-        return seeds
-
-    @staticmethod
-    def _build_label_images(
-        img: np.ndarray, seeds: "Cv2SuperpixelSeed"
-    ) -> List[np.ndarray]:
+    def _build_label_images(self, img: np.ndarray) -> List[np.ndarray]:
         """Builds the label images from the superpixel seed.
 
         Args:
@@ -140,18 +116,75 @@ class SuperpixelHandler:
         Note:
             The label images are the seperate superpixel images of the original image.
         """
-        label_map, num_labels = (
-            seeds.getLabels(),
-            seeds.getNumberOfSuperpixels(),
+        # load the image and perform pyramid mean shift filtering
+        # to aid the thresholding step
+        image = cv2.normalize(
+            img, img, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F
         )
 
-        label_maps = [
-            np.where(label_map == i, 1, 0).astype(np.uint8) for i in range(num_labels)
-        ]
+        norm_image = np.zeros(image.shape)
+        norm_image = cv2.normalize(
+            image,
+            norm_image,
+            alpha=0,
+            beta=255,
+            norm_type=cv2.NORM_MINMAX,
+            dtype=cv2.CV_32F,
+        )
+        norm_image = norm_image.astype(np.uint8).transpose(1, 2, 0)
 
-        return [
-            cv2.bitwise_and(img, img, mask=label_maps[i]) for i in range(num_labels)
-        ]
+        shifted = cv2.pyrMeanShiftFiltering(
+            norm_image,
+            self.segmentation_kwargs["mean_shifting_spatial_radius"],
+            self.segmentation_kwargs["mean_shifting_color_radius"],
+        )
+
+        # convert the mean shift image to grayscale, then apply
+        # Otsu's thresholding
+        gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
+        if self.segmentation_kwargs["invert"]:
+            gray = cv2.bitwise_not(gray)
+        thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+
+        # compute the exact Euclidean distance from every binary
+        # pixel to the nearest zero pixel, then find peaks in this
+        # distance map
+        D = ndimage.distance_transform_edt(thresh)
+        localMax = peak_local_max(
+            D,
+            indices=False,
+            min_distance=self.segmentation_kwargs["peak_local_max_min_dist"],
+            labels=thresh,
+        )
+
+        # perform a connected component analysis on the local peaks,
+        # using 8-connectivity, then appy the Watershed algorithm
+        markers = ndimage.label(localMax, structure=np.ones((3, 3)))[0]
+        labels = watershed(-D, markers, mask=thresh)
+        print(f"[INFO] {len(np.unique(labels)) - 1} unique segments found")
+
+        self._num_superpixels = len(np.unique(labels)) - 1
+
+        # loop over the unique labels returned by the Watershed
+        # algorithm
+        label_images = []
+        for label in np.unique(labels):
+            # if the label is zero, we are examining the 'background'
+            # so simply ignore it
+            if label == 0:
+                continue
+            # otherwise, allocate memory for the label region and draw
+            # it on the mask
+            mask = np.zeros(gray.shape, dtype=np.uint8)
+            mask[labels == label] = 255
+
+            w = np.array(mask == 255, dtype=np.uint8)
+
+            # generate image where mask is equal to 255
+            cp_img = img.copy().transpose(1, 2, 0)
+            res = cv2.bitwise_and(cp_img, cp_img, mask=w)
+            label_images.append(res.transpose(2, 0, 1))
+        return label_images
 
     def generate_img_from_weight_vector(self, weight_vec: np.ndarray) -> np.ndarray:
         """Generates an image from a weight vector.
