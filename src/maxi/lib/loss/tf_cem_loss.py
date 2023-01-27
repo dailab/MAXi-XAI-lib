@@ -48,7 +48,10 @@ class TF_CEMLoss(CEMLoss):
                 target image.
             channels_first (bool, optional): Whether the channels dimension comes before the width and height \
                 dimensions as in [bs, channels, width, height].
-            
+        
+        Configurable Parameters:
+            c, gamma, K, AE, channels_first
+        
         Note:
             The loss functions are implemented solely using derivable TensorFlow methods. In order to use \
             TF's automatic differentiation on this class' methods, the model must be implemented in TF as well.
