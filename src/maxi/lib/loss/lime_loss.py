@@ -14,7 +14,7 @@ from ..computation_components.gradient import (
 )
 from ...data.data_types import InferenceCall
 from ...utils.general import to_numpy
-from ...utils.superpixel_handler import SuperpixelHandler
+from ..image_segmentation.base_seg_handler import BaseSegmentationHandler
 
 
 class LimeLoss(BaseExplanationModel):
@@ -276,7 +276,7 @@ class SuperpixelLimeLoss(LimeLoss):
         lower: np.ndarray = None,
         upper: np.ndarray = None,
         channels_first: bool = False,
-        superpixel_handler: SuperpixelHandler = None,
+        superpixel_handler: BaseSegmentationHandler = None,
     ):
         """Loss function for Superpixel-LIME (Local Interpretable Model-Agnostic Explanations)
 
@@ -293,7 +293,7 @@ class SuperpixelLimeLoss(LimeLoss):
                 target image. Defaults to None.
             upper (np.ndarray, optional): Upper bound for the optimization. Has to be of the same shape as the \
                 target image. Defaults to None.
-            superpixel_handler (SuperpixelHandler, optional): Superpixel handler. Defaults to None.
+            superpixel_handler (BaseSegmentationHandler, optional): BaseSegmentationHandler. Defaults to None.
                 
         Configurable Parameters:
             n_samples, channels_first
@@ -324,22 +324,18 @@ class SuperpixelLimeLoss(LimeLoss):
         self,
         lower: Union[None, np.ndarray],
         upper: Union[None, np.ndarray],
-        org_img: np.ndarray,
+        *args,
+        **kwargs,
     ):
         """Initializes the lower and upper bound for the optimization.
 
         Args:
             lower (Union[None, np.ndarray]): Lower bound for the optimization.
             upper (Union[None, np.ndarray]): Upper bound for the optimization.
-            org_img (np.ndarray): Original image.
         """
         DEFAULT_LB_UB = {
-            "lower": np.full(
-                (self.superpixel_handler.num_superpixels), -1.0, np.float32
-            ),
-            "upper": np.full(
-                (self.superpixel_handler.num_superpixels), 1.0, np.float32
-            ),
+            "lower": np.full((self.superpixel_handler.num_segments), -1.0, np.float32),
+            "upper": np.full((self.superpixel_handler.num_segments), 1.0, np.float32),
         }
 
         self._lower = DEFAULT_LB_UB["lower"] if lower is None else lower
@@ -448,7 +444,7 @@ class SuperpixelLimeLoss(LimeLoss):
 
         # draw random weights for non_zero_indices
         weight_vector = np.zeros(
-            (self.superpixel_handler.num_superpixels), dtype=np.float64
+            (self.superpixel_handler.num_segments), dtype=np.float64
         )
         random_weights = self.randomState.uniform(low=0.0, high=1.0, size=k)
         np.put(weight_vector, indices, random_weights, mode="raise")
