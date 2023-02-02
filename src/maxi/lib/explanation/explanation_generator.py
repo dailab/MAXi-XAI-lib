@@ -46,6 +46,9 @@ class ExplanationGenerator:
             poses as the loss function of an explanation method incorporated by the optimizer algorithm.
             After calling the ``run()`` method the optimizer starts producing a perturbed image (x_0) which \
             will get altered and optimized. \
+            Optionally, the ``SegmentationHandler`` can be used to segment the image into regions of interest. \
+            In order to use the ``SegmentationHandler`` the ``ExplanationModel`` has to be compatible with it. \
+            See the ``SegmentationHandler`` documentation for more information. \
             One can also specify the frequency of which savepoints are going to be created.
 
         Args:
@@ -55,12 +58,16 @@ class ExplanationGenerator:
                 algorithm. Defaults to AdaExpGradOptimizer.
             gradient (Type[BaseGradient], optional): Subclass instance of ``BaseGradient`` - a particular gradient \
                 method. Defaults to GradientEstimator.
+            sg_algorithm (Type[BaseSegmentationHandler], optional): Subclass instance of ``BaseSegmentationHandler`` - \
+                chosen segmentation algorithm. Defaults to None.
             loss_kwargs (Dict[str, str], optional): Keyword arguments to be parsed to the loss function initilization.
                 Defaults to { "mode": "PP", "gamma": 75, "K": 10, "AE": None}.
             optimizer_kwargs (Dict[str, str], optional): Keyword arguments to be parsed to the optimizer initilization.
                 Defaults to {"l1": 0.5, "l2": 0.5, "eta": 1.0}.
             gradient_kwargs (Dict[str, str], optional): Keyword arguments to be parsed to the gradient method \
                 initilization. Defaults to {"mu": None}.
+            sg_kwargs (Dict[str, str], optional): Keyword arguments to be parsed to the segmentation algorithm. 
+                Defaults to None. \
             num_iter (int, optional): Number of optimization iterations. Defaults to 30.
             save_freq (int, optional): Frequency of optimizer updates after which the object of optimization is saved. \
                 The savepoints will be stored in an OrderedDict and eventually returned. Defaults to np.inf \
@@ -74,8 +81,8 @@ class ExplanationGenerator:
         if gradient_kwargs is None:
             gradient_kwargs = {"mu": None}
 
-        ExplanationGenerator._check_parsed_classes(
-            sg_algorithm, loss, optimizer, gradient
+        ExplanationGenerator._check_parsed_args(
+            sg_algorithm, loss, optimizer, gradient, sg_kwargs
         )
         self.loss, self.optimizer, self.gradient = loss, optimizer, gradient
         self._loss_kwargs, self._optimizer_kwargs, self._gradient_kwargs = (
@@ -95,20 +102,26 @@ class ExplanationGenerator:
             self.superpixel_handler,
         ) = ("superpixel" in loss.__name__.lower(), sg_algorithm, sg_kwargs, None)
 
+        if self._superpixel_mode and self._sg_kwargs["alg_kwargs"] is None:
+            self._sg_kwargs["alg_kwargs"] = {}
+
         self.logging_cb = logger._callback
         self.verbose = verbose
 
     @staticmethod
-    def _check_parsed_classes(
+    def _check_parsed_args(
         sg_algorithm: Type[BaseSegmentationHandler],
         loss: Type[BaseExplanationModel],
         optimizer: Type[BaseOptimizer],
         gradient: Type[BaseGradient],
+        sg_kwargs: Dict[str, str],
     ) -> None:
-        if not issubclass(sg_algorithm, BaseSegmentationHandler):
+        if sg_algorithm and not issubclass(sg_algorithm, BaseSegmentationHandler):
             raise TypeError(
                 "Segmentation algorithm must be a subclass of BaseSegmentationHandler"
             )
+        if sg_algorithm and "alg_kwargs" not in sg_kwargs and sg_kwargs:
+            raise ValueError("'alg_kwargs' key must be specified in sg_kwargs.")
         if not issubclass(loss, BaseExplanationModel):
             raise TypeError("Loss must be a subclass of BaseExplanationModel")
         if not issubclass(optimizer, BaseOptimizer):
@@ -128,11 +141,13 @@ class ExplanationGenerator:
             inference_call (Union[Callable[[np.ndarray], np.ndarray], InferenceWrapper]): Inference method returning explanation model \
                 compatible predictions. E.g. classification format as in [0.3, 0.2, 3.7].
         Returns:
-            Tuple[BaseExplanationModel, BaseGradient, BaseOptimizer]: [description]
+            Tuple[BaseExplanationModel, BaseGradient, BaseOptimizer]: Initialized components.
         """
+
+        # Segmentation mode
         if self._superpixel_mode:
             self.superpixel_handler = self._sg_algorithm(
-                image=image, **self._sg_kwargs["kwargs"]
+                image=image, **self._sg_kwargs["alg_kwargs"]
             )
 
         # Loss function

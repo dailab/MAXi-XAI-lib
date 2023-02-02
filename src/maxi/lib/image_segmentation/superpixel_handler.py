@@ -7,7 +7,9 @@ from maxi.lib.image_segmentation.base_seg_handler import BaseSegmentationHandler
 
 
 class SuperpixelHandler(BaseSegmentationHandler):
-    def __init__(self, image: np.ndarray, sp_algorithm: str, sp_kwargs: dict) -> None:
+    def __init__(
+        self, image: np.ndarray, sp_algorithm: str = "SLIC", sp_kwargs: dict = None
+    ) -> None:
         """SuperpixelHandler class to handle superpixel generation.
 
         Description:
@@ -21,6 +23,9 @@ class SuperpixelHandler(BaseSegmentationHandler):
         """
         self.image = image
         # Currently only MSLIC is supported (hardcoded in _generate_superpixel_seed)
+        if not sp_kwargs:
+            sp_kwargs = {"region_size": 8, "ruler": 200}
+
         self.sp_algorithm, self.sp_kwargs = (
             SuperpixelHandler._retrieve_sp_algorithm(sp_algorithm),
             sp_kwargs,

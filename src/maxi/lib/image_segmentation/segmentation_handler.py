@@ -116,7 +116,7 @@ class SegmentationHandler(BaseSegmentationHandler):
         labels = watershed(-D, markers, mask=thresh)
         print(f"[INFO] {len(np.unique(labels)) - 1} unique segments found")
 
-        self._num_superpixels = len(np.unique(labels)) - 1
+        self._num_segments = len(np.unique(labels)) - 1
 
         # loop over the unique labels returned by the Watershed
         # algorithm
