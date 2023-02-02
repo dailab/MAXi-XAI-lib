@@ -1,5 +1,5 @@
 """Base Explanation Model"""
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import List
 
 import numpy as np

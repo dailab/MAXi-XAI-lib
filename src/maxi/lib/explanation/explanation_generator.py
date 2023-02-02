@@ -58,7 +58,7 @@ class ExplanationGenerator:
                 algorithm. Defaults to AdaExpGradOptimizer.
             gradient (Type[BaseGradient], optional): Subclass instance of ``BaseGradient`` - a particular gradient \
                 method. Defaults to GradientEstimator.
-            sg_algorithm (Type[BaseSegmentationHandler], optional): Subclass instance of ``BaseSegmentationHandler`` - \
+            sg_algorithm (Type[BaseSegmentationHandler], optional): Subclass of ``BaseSegmentationHandler`` - \
                 chosen segmentation algorithm. Defaults to None.
             loss_kwargs (Dict[str, str], optional): Keyword arguments to be parsed to the loss function initilization.
                 Defaults to { "mode": "PP", "gamma": 75, "K": 10, "AE": None}.

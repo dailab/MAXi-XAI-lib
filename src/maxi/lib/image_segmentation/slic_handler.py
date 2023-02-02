@@ -6,7 +6,7 @@ import numpy as np
 from maxi.lib.image_segmentation.base_seg_handler import BaseSegmentationHandler
 
 
-class SuperpixelHandler(BaseSegmentationHandler):
+class SlicHandler(BaseSegmentationHandler):
     def __init__(
         self, image: np.ndarray, sp_algorithm: str = "SLIC", sp_kwargs: dict = None
     ) -> None:
@@ -27,15 +27,13 @@ class SuperpixelHandler(BaseSegmentationHandler):
             sp_kwargs = {"region_size": 8, "ruler": 200}
 
         self.sp_algorithm, self.sp_kwargs = (
-            SuperpixelHandler._retrieve_sp_algorithm(sp_algorithm),
+            SlicHandler._retrieve_sp_algorithm(sp_algorithm),
             sp_kwargs,
         )
-        self.adj_image = SuperpixelHandler.adjust_image_shape(image)
+        self.adj_image = SlicHandler.adjust_image_shape(image)
         self.seed = self._generate_superpixel_seed(self.adj_image)
         self._num_segments = self.seed.getNumberOfSuperpixels()
-        self._label_images = SuperpixelHandler._build_label_images(
-            self.adj_image, self.seed
-        )
+        self._label_images = SlicHandler._build_label_images(self.adj_image, self.seed)
         self._readjusted_label_images = self.get_readjusted_labelimages()
 
     @staticmethod

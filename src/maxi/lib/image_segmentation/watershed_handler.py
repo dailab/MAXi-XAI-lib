@@ -9,7 +9,7 @@ import numpy as np
 import cv2
 
 
-class SegmentationHandler(BaseSegmentationHandler):
+class WatershedHandler(BaseSegmentationHandler):
     def __init__(
         self, image: np.ndarray, sg_kwargs: dict = None, *args, **kwargs
     ) -> None:
@@ -33,7 +33,7 @@ class SegmentationHandler(BaseSegmentationHandler):
                 "invert": True,
             }
         self.segmentation_kwargs = sg_kwargs
-        self.adj_image = SegmentationHandler.adjust_image_shape(image)
+        self.adj_image = WatershedHandler.adjust_image_shape(image)
         self._label_images = self._build_label_images(self.adj_image)
         self._readjusted_label_images = self.get_readjusted_labelimages()
 
