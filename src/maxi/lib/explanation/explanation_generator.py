@@ -81,9 +81,7 @@ class ExplanationGenerator:
         if gradient_kwargs is None:
             gradient_kwargs = {"mu": None}
 
-        ExplanationGenerator._check_parsed_args(
-            sg_algorithm, loss, optimizer, gradient, sg_kwargs
-        )
+        ExplanationGenerator._check_parsed_args(sg_algorithm, loss, optimizer, gradient)
         self.loss, self.optimizer, self.gradient = loss, optimizer, gradient
         self._loss_kwargs, self._optimizer_kwargs, self._gradient_kwargs = (
             loss_kwargs,
@@ -102,8 +100,8 @@ class ExplanationGenerator:
             self.superpixel_handler,
         ) = ("superpixel" in loss.__name__.lower(), sg_algorithm, sg_kwargs, None)
 
-        if self._superpixel_mode and self._sg_kwargs["alg_kwargs"] is None:
-            self._sg_kwargs["alg_kwargs"] = {}
+        if self._superpixel_mode and self._sg_kwargs is None:
+            self._sg_kwargs = {}
 
         self.logging_cb = logger._callback
         self.verbose = verbose
@@ -114,14 +112,11 @@ class ExplanationGenerator:
         loss: Type[BaseExplanationModel],
         optimizer: Type[BaseOptimizer],
         gradient: Type[BaseGradient],
-        sg_kwargs: Dict[str, str],
     ) -> None:
         if sg_algorithm and not issubclass(sg_algorithm, BaseSegmentationHandler):
             raise TypeError(
                 "Segmentation algorithm must be a subclass of BaseSegmentationHandler"
             )
-        if sg_algorithm and "alg_kwargs" not in sg_kwargs and sg_kwargs:
-            raise ValueError("'alg_kwargs' key must be specified in sg_kwargs.")
         if not issubclass(loss, BaseExplanationModel):
             raise TypeError("Loss must be a subclass of BaseExplanationModel")
         if not issubclass(optimizer, BaseOptimizer):
@@ -146,9 +141,7 @@ class ExplanationGenerator:
 
         # Segmentation mode
         if self._superpixel_mode:
-            self.superpixel_handler = self._sg_algorithm(
-                image=image, **self._sg_kwargs["alg_kwargs"]
-            )
+            self.superpixel_handler = self._sg_algorithm(image=image, **self._sg_kwargs)
 
         # Loss function
         loss_instance: BaseExplanationModel = self.loss(

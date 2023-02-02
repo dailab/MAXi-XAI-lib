@@ -7,33 +7,40 @@ from maxi.lib.image_segmentation.base_seg_handler import BaseSegmentationHandler
 
 
 class SlicHandler(BaseSegmentationHandler):
+    _channels_first = False
+
     def __init__(
-        self, image: np.ndarray, sp_algorithm: str = "SLIC", sp_kwargs: dict = None
+        self,
+        image: np.ndarray,
+        sp_algorithm: str = "SLIC",
+        region_size: int = 8,
+        ruler: int = 200,
+        num_iter: int = 10,
     ) -> None:
-        """SuperpixelHandler class to handle superpixel generation.
+        """CV2 SlicHandler class to handle superpixel generation.
 
-        Description:
-            This class is used to generate superpixels from an image and to generate
-
+        References:
+            https://docs.opencv.org/3.4/df/d6c/group__ximgproc__superpixel.html
+            https://docs.opencv.org/3.4/d3/da9/classcv_1_1ximgproc_1_1SuperpixelSLIC.html
 
         Args:
-            image (np.ndarray): Array containing the image of shape [W, H, C]
-            sp_algorithm (str): CV2 superpixel algorithm to use: SLIC, SLICO, MSLIC.
-            sp_kwargs (dict): Superpixel algorithm kwargs.
+            image (np.ndarray): Array containing the image of shape.
+            sp_algorithm (str): CV2 superpixel algorithm to use: SLIC, SLICO, MSLIC. Defaults to "SLIC".
+            region_size (int): Region size in pixels. Defaults to 8.
+            ruler (int): Balances color-space proximity and image-space proximity. Defaults to 200.
+            num_iter (int): Number of iterations. Defaults to 10.
         """
         self.image = image
-        # Currently only MSLIC is supported (hardcoded in _generate_superpixel_seed)
-        if not sp_kwargs:
-            sp_kwargs = {"region_size": 8, "ruler": 200}
-
-        self.sp_algorithm, self.sp_kwargs = (
-            SlicHandler._retrieve_sp_algorithm(sp_algorithm),
-            sp_kwargs,
+        self.sp_algorithm = SlicHandler._retrieve_sp_algorithm(sp_algorithm)
+        self.region_size, self.ruler, self.num_iter = (
+            region_size,
+            ruler,
+            num_iter,
         )
-        self.adj_image = SlicHandler.adjust_image_shape(image)
+        self.adj_image = self.adjust_image_shape(image)
         self.seed = self._generate_superpixel_seed(self.adj_image)
         self._num_segments = self.seed.getNumberOfSuperpixels()
-        self._label_images = SlicHandler._build_label_images(self.adj_image, self.seed)
+        self._label_images = self._build_label_images(self.adj_image, self.seed)
         self._readjusted_label_images = self.get_readjusted_labelimages()
 
     @staticmethod
@@ -100,24 +107,17 @@ class SlicHandler(BaseSegmentationHandler):
         Returns:
             Cv2SuperpixelSeed: Superpixel seed object.
         """
-        assert self.sp_kwargs, "No superpixel algorithm kwargs given."
         # img = transformations.rescale_image_to_0_255(img)
-
-        num_iterations = self.sp_kwargs.get("num_iterations", 25)
-        sp_kwargs_copy = self.sp_kwargs.copy()
-        if "num_iterations" in sp_kwargs_copy:
-            del sp_kwargs_copy["num_iterations"]
-
         seeds = cv2.ximgproc.createSuperpixelSLIC(
-            img, algorithm=self.sp_algorithm, **sp_kwargs_copy
+            img,
+            algorithm=self.sp_algorithm,
+            region_size=self.region_size,
+            ruler=self.ruler,
         )
-        seeds.iterate(num_iterations)
+        seeds.iterate(self.num_iter)
         return seeds
 
-    @staticmethod
-    def _build_label_images(
-        img: np.ndarray, seeds: "Cv2SuperpixelSeed"
-    ) -> List[np.ndarray]:
+    def _build_label_images(self, img: np.ndarray) -> List[np.ndarray]:
         """Builds the label images from the superpixel seed.
 
         Args:
@@ -131,8 +131,8 @@ class SlicHandler(BaseSegmentationHandler):
             The label images are the seperate superpixel images of the original image.
         """
         label_map, num_labels = (
-            seeds.getLabels(),
-            seeds.getNumberOfSuperpixels(),
+            self.seed.getLabels(),
+            self.seed.getNumberOfSuperpixels(),
         )
 
         label_maps = [

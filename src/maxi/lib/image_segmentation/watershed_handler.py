@@ -10,30 +10,38 @@ import cv2
 
 
 class WatershedHandler(BaseSegmentationHandler):
+    _channels_first = True
+
     def __init__(
-        self, image: np.ndarray, sg_kwargs: dict = None, *args, **kwargs
+        self,
+        image: np.ndarray,
+        ms_spatial_radius: int = 14,
+        ms_color_radius: int = 32,
+        max_min_dist: int = 20,
+        invert: bool = True,
     ) -> None:
-        """SuperpixelHandler class to handle superpixel generation.
+        """SKImage WaterhsedHandler class to handle watershed segmentation.
 
         Description:
             This class is used to generate superpixels from an image and to generate
 
         Args:
-            image (np.ndarray): Array containing the image of shape [W, H, C]
-            sp_algorithm (str): CV2 superpixel algorithm to use: SLIC, SLICO, MSLIC.
-            sp_kwargs (dict): Superpixel algorithm kwargs.
+            image (np.ndarray): Array containing the image.
+            ms_spatial_radius (int): Mean shifting spatial radius. Defaults to 14.
+            ms_color_radius (int): Mean shifting color radius. Defaults to 32.
+            max_min_dist (int): Peak local max min dist. Defaults to 20.
+            invert (bool): Invert image before applying watershed algorithm. \
+                Defaults to True.
         """
         self.image = image
-        # Currently only MSLIC is supported (hardcoded in _generate_superpixel_seed)
-        if not sg_kwargs:
-            sg_kwargs = {
-                "mean_shifting_spatial_radius": 14,
-                "mean_shifting_color_radius": 32,
-                "peak_local_max_min_dist": 20,
-                "invert": True,
-            }
-        self.segmentation_kwargs = sg_kwargs
-        self.adj_image = WatershedHandler.adjust_image_shape(image)
+        self.ms_spatial_radius, self.ms_color_radius, self.max_min_dist, self.invert = (
+            ms_spatial_radius,
+            ms_color_radius,
+            max_min_dist,
+            invert,
+        )
+
+        self.adj_image = self.adjust_image_shape(image)
         self._label_images = self._build_label_images(self.adj_image)
         self._readjusted_label_images = self.get_readjusted_labelimages()
 
@@ -55,19 +63,16 @@ class WatershedHandler(BaseSegmentationHandler):
         return image
 
     def _build_label_images(self, img: np.ndarray) -> List[np.ndarray]:
-        """Builds the label images from the superpixel seed.
+        """Builds the label images by applying the watershed algorithm.
 
         Args:
-            img (np.ndarray): Array containing image of shape [W, H, C].
-            seeds (Cv2SuperpixelSeed): Superpixel seed object.
+            img (np.ndarray): Array containing image of shape [C, W, H].
 
         Returns:
-            List[np.ndarray]: List containing the label images of shape [W, H, C].
+            List[np.ndarray]: List containing the label images of shape [C, W, H].
 
         Note:
             The label images are the seperate superpixel images of the original image.
-            During the label image generation, the "_num_segments" attribute
-            has to be set.
         """
         # load the image and perform pyramid mean shift filtering
         # to aid the thresholding step
@@ -88,14 +93,14 @@ class WatershedHandler(BaseSegmentationHandler):
 
         shifted = cv2.pyrMeanShiftFiltering(
             norm_image,
-            self.segmentation_kwargs["mean_shifting_spatial_radius"],
-            self.segmentation_kwargs["mean_shifting_color_radius"],
+            self.ms_spatial_radius,
+            self.ms_color_radius,
         )
 
         # convert the mean shift image to grayscale, then apply
         # Otsu's thresholding
         gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
-        if self.segmentation_kwargs["invert"]:
+        if self.invert:
             gray = cv2.bitwise_not(gray)
         thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
 
@@ -106,7 +111,7 @@ class WatershedHandler(BaseSegmentationHandler):
         localMax = peak_local_max(
             D,
             indices=False,
-            min_distance=self.segmentation_kwargs["peak_local_max_min_dist"],
+            min_distance=self.max_min_dist,
             labels=thresh,
         )
 
