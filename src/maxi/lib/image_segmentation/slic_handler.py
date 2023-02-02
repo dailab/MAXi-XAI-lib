@@ -40,7 +40,7 @@ class SlicHandler(BaseSegmentationHandler):
         self.adj_image = self.adjust_image_shape(image)
         self.seed = self._generate_superpixel_seed(self.adj_image)
         self._num_segments = self.seed.getNumberOfSuperpixels()
-        self._label_images = self._build_label_images(self.adj_image, self.seed)
+        self._label_images = self._build_label_images(self.adj_image)
         self._readjusted_label_images = self.get_readjusted_labelimages()
 
     @staticmethod
