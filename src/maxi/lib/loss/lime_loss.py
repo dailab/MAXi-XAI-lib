@@ -1,6 +1,6 @@
 """Lime Loss Function Module"""
 
-__all__ = ["LimeLoss"]
+__all__ = ["LimeLoss", "SuperpixelLimeLoss"]
 
 from typing import Callable, List, Union
 

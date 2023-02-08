@@ -1,6 +1,6 @@
 """Lime Gradient Calculation"""
 
-__all__ = ["Lime_Gradient"]
+__all__ = ["LimeGradient"]
 
 import numpy as np
 

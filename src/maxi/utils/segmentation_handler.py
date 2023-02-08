@@ -18,7 +18,6 @@ class SegmentationHandler(SuperpixelHandler):
         Description:
             This class is used to generate superpixels from an image and to generate
 
-
         Args:
             image (np.ndarray): Array containing the image of shape [W, H, C]
             sp_algorithm (str): CV2 superpixel algorithm to use: SLIC, SLICO, MSLIC.
@@ -70,9 +69,7 @@ class SegmentationHandler(SuperpixelHandler):
         Returns:
             np.ndarray: Array containing the readjusted label images.
         """
-        if self.label_images[0].shape not in self.image.shape:
-            image = [img.reshape(self.image.shape[1:]) for img in self.label_images]
-        return image
+        return [img.reshape(self.image.shape[1:]) for img in self.label_images]
 
     @staticmethod
     def _retrieve_sp_algorithm(
