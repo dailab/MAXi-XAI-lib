@@ -1,3 +1,4 @@
+"""CV2 SlicHandler class to handle superpixel generation."""
 from typing import List, Union
 
 import cv2
@@ -30,21 +31,19 @@ class SlicHandler(BaseSegmentationHandler):
             ruler (int): Balances color-space proximity and image-space proximity. Defaults to 200.
             num_iter (int): Number of iterations. Defaults to 10.
         """
-        self.image = image
         self.sp_algorithm = SlicHandler._retrieve_sp_algorithm(sp_algorithm)
         self.region_size, self.ruler, self.num_iter = (
             region_size,
             ruler,
             num_iter,
         )
-        self.adj_image = self.adjust_image_shape(image)
-        self.seed = self._generate_superpixel_seed(self.adj_image)
-        self._num_segments = self.seed.getNumberOfSuperpixels()
-        self._label_images = self._build_label_images(self.adj_image)
-        self._readjusted_label_images = self.get_readjusted_labelimages()
+        super().__init__(image)
 
     @staticmethod
     def adjust_image_shape(image: np.ndarray) -> np.ndarray:
+        if image.ndim not in [2, 3, 4]:
+            raise ValueError("Image has to be 2D, 3D or 4D.")
+
         # Image has to be channels-last and 3D
         if image.ndim == 2:
             image = np.expand_dims(image, axis=-1)
@@ -54,22 +53,6 @@ class SlicHandler(BaseSegmentationHandler):
 
         if image.shape[0] in [1, 3]:
             image = image.transpose(1, 2, 0)
-        return image
-
-    def get_readjusted_labelimages(self) -> np.ndarray:
-        """Readjusts the label images to the original image shape.
-
-        Example:
-            Original image has shape [1, 3, 256, 256]
-            Label images have shape [256, 256, 3]
-            ---------------------------------------------------------
-            Readjusted label images have shape [3, 256, 256]
-
-        Returns:
-            np.ndarray: Array containing the readjusted label images.
-        """
-        if self.label_images[0].shape not in self.image.shape:
-            image = [img.reshape(self.image.shape[1:]) for img in self.label_images]
         return image
 
     @staticmethod
@@ -130,6 +113,9 @@ class SlicHandler(BaseSegmentationHandler):
         Note:
             The label images are the seperate superpixel images of the original image.
         """
+        self.seed = self._generate_superpixel_seed(img)
+        self._num_segments = self.seed.getNumberOfSuperpixels()
+
         label_map, num_labels = (
             self.seed.getLabels(),
             self.seed.getNumberOfSuperpixels(),

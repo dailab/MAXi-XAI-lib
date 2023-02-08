@@ -26,6 +26,8 @@ class BaseSegmentationHandler(ABC):
             sp_kwargs (dict): Superpixel algorithm kwargs.
         """
         self.image = image
+        self.adj_image = self.adjust_image_shape(image)
+        self._label_images = self._build_label_images(self.adj_image)
 
     @property
     def label_images(self) -> List[np.ndarray]:
@@ -119,7 +121,7 @@ class BaseSegmentationHandler(ABC):
         f"Got: {weight_vec.shape}, Expected: ({self.num_segments},)"
 
         if not hasattr(self, "_readjusted_label_images"):
-            raise ValueError("Readjusted label images have not been initialized.")
+            self._readjusted_label_images = self.get_readjusted_labelimages()
 
         res_img = np.zeros(self.image.shape, dtype=np.float32)
 

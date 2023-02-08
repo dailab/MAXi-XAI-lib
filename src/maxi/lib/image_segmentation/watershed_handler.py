@@ -1,3 +1,4 @@
+"""SKImage WatershedHandler class to handle watershed segmentation."""
 from typing import List
 from maxi.lib.image_segmentation.base_seg_handler import BaseSegmentationHandler
 
@@ -33,17 +34,13 @@ class WatershedHandler(BaseSegmentationHandler):
             invert (bool): Invert image before applying watershed algorithm. \
                 Defaults to True.
         """
-        self.image = image
         self.ms_spatial_radius, self.ms_color_radius, self.max_min_dist, self.invert = (
             ms_spatial_radius,
             ms_color_radius,
             max_min_dist,
             invert,
         )
-
-        self.adj_image = self.adjust_image_shape(image)
-        self._label_images = self._build_label_images(self.adj_image)
-        self._readjusted_label_images = self.get_readjusted_labelimages()
+        super().__init__(image)
 
     @staticmethod
     def adjust_image_shape(image: np.ndarray) -> np.ndarray:
