@@ -31,34 +31,43 @@
 
 __all__ = [&#34;CEMLoss&#34;]
 
-from typing import Callable, Tuple
+from typing import Callable, Union
 
 import numpy as np
 from numpy.linalg import norm
 
 from .base_explanation_model import BaseExplanationModel
-from ..computation_components.gradient import URVGradientEstimator
+from ..computation_components.gradient import (
+    URVGradientEstimator,
+    USRVGradientEstimator,
+)
 from ...data.data_types import InferenceCall
 from ...utils import loss_utils, x0_generators
 from ...utils.general import to_numpy
 
 
 class CEMLoss(BaseExplanationModel):
-    compatible_grad_methods = [URVGradientEstimator]
-    pp_x0_generator, pn_x0_generator = x0_generators.generate_rand_image, np.zeros_like
+    compatible_grad_methods = [URVGradientEstimator, USRVGradientEstimator]
+    # pp_x0_generator, pn_x0_generator = lambda x: x, np.zeros_like
+    pp_x0_generator, pn_x0_generator = (
+        lambda x: x,
+        loss_utils.generate_from_gaussian,
+    )
 
     def __init__(
         self,
         mode: str,
         org_img: np.ndarray,
         inference: InferenceCall,
-        c: float,
-        gamma: float,
-        K: float,
+        c: float = 1.0,
+        gamma: float = 10,
+        K: float = 10,
         AE: Callable[[np.ndarray], np.ndarray] = None,
         lower: np.ndarray = None,
         upper: np.ndarray = None,
         channels_first: bool = False,
+        *args,
+        **kwargs,
     ):
         &#34;&#34;&#34; Loss function of the Contrastive-Explanation-Method
 
@@ -68,25 +77,29 @@ class CEMLoss(BaseExplanationModel):
 
         Args:
             mode (str): Chose between &#34;PP&#34; for _pertinent positive_ / &#34;PN&#34; for _pertinent negative_.
-            org_img (ndarray): Original image [width, height, channels]
+            org_img (ndarray): Original image [width, height, channels] or [channels, width, height].
             inference (InferenceCall): Inference method of an external prediction entity. Has to return an \
                 interpretable representation of the underlying prediction, e.g. a binary vector indicating \
                 the “presence” or “absence”.
-            c (float): $$f_K$$ regularization coefficient.
-            gamma (float): Regularization coefficient for the autoencoder term.
-            K (float): Confidence parameter for seperation between probability of target and non-target value.
+            c (float, optional): $$f_K$$ regularization coefficient.
+            gamma (float, optional): Regularization coefficient for the autoencoder term.
+            K (float, optional): Confidence parameter for seperation between probability of target and non-target value.
             AE (Callable[[ndarray], ndarray]): Autoencoder, if None disregard AE error term.
             lower (np.ndarray, optional): Lower bound for the optimization. Has to be of the same shape as the \
-                target image.
+                target image. Defaults to None.
             upper (np.ndarray, optional): Upper bound for the optimization. Has to be of the same shape as the \
-                target image.
+                target image. Defaults to None.
             channels_first (bool, optional): Whether the channels dimension comes before the width and height \
                 dimensions as in [bs, channels, width, height].
             
+        Configurable Parameters:
+            c, gamma, K, AE, channels_first
+            
         Note:
             The hardcoded lower and upper bounds in ```_init_lower_upper()``` are tailored for images with \
-            pixel range of -0.5 to 0.5. For other ranges, it is required to specify it accordingly.\
+            pixel range of [0, 1] or [0, 255]. For other ranges, it is required to specify it accordingly.\
             Otherwise it might strongly adulterate the results.
+            
         &#34;&#34;&#34;
         self._setup_mode(mode)
         self._init_lower_upper(lower, upper, org_img)
@@ -107,23 +120,36 @@ class CEMLoss(BaseExplanationModel):
         # channel dimension
         self._c_dim = 1 if channels_first else -1  # 1 channels first, -1 channels last
 
-    def _init_lower_upper(self, lower: Tuple[None, np.ndarray], upper: Tuple[None, np.ndarray], org_img: np.ndarray):
+    def _init_lower_upper(
+        self,
+        lower: Union[None, np.ndarray],
+        upper: Union[None, np.ndarray],
+        org_img: np.ndarray,
+    ):
         DEFAULT_LB_UB = {
             &#34;PP&#34;: {
-                &#34;lower&#34;: np.full(org_img.shape, np.min(org_img)),
-                &#34;upper&#34;: org_img if type(org_img) is np.ndarray else org_img.numpy(),
+                &#34;lower&#34;: np.full(org_img.shape, 0.0),
+                # &#34;lower&#34;: np.zeros(org_img.shape),
+                &#34;upper&#34;: to_numpy(org_img),
             },
             &#34;PN&#34;: {
-                &#34;lower&#34;: np.where(org_img &gt; 0, 0.0, 0.0),
-                &#34;upper&#34;: np.where(org_img &lt; 0, 1, 0.0),
+                &#34;lower&#34;: np.full(org_img.shape, -1.0),
+                # &#34;upper&#34;: 1.0 - to_numpy(org_img),
+                &#34;upper&#34;: np.full(org_img.shape, 1.0),
             },
         }
+        DEFAULT_LB_UB[&#34;PPSMOOTH&#34;] = DEFAULT_LB_UB[&#34;PP&#34;]
+        DEFAULT_LB_UB[&#34;PNSMOOTH&#34;] = DEFAULT_LB_UB[&#34;PN&#34;]
 
         self._lower = DEFAULT_LB_UB[self.mode][&#34;lower&#34;] if lower is None else lower
         self._upper = DEFAULT_LB_UB[self.mode][&#34;upper&#34;] if upper is None else upper
 
-        assert type(self._lower) is np.ndarray, &#34;Invalid lower bound given for optimization&#34;
-        assert type(self._upper) is np.ndarray, &#34;Invalid upper bound given for optimization&#34;
+        assert (
+            type(self._lower) is np.ndarray
+        ), &#34;Invalid lower bound given for optimization&#34;
+        assert (
+            type(self._upper) is np.ndarray
+        ), &#34;Invalid upper bound given for optimization&#34;
 
         if self._lower.shape != org_img.shape:
             raise ValueError(
@@ -136,12 +162,33 @@ class CEMLoss(BaseExplanationModel):
             )
 
     def _setup_mode(self, input: str):
-        assert input.upper() in [&#34;PP&#34;, &#34;PN&#34;], &#34;Provided unknown mode for CEM&#34;
+        assert input.upper() in {
+            &#34;PP&#34;,
+            &#34;PN&#34;,
+            &#34;PPSMOOTH&#34;,
+            &#34;PNSMOOTH&#34;,
+        }, &#34;Provided unknown mode for CEM&#34;
         self.mode = input.upper()
 
         self.get_loss, self._x0_generator = (
-            (self.PP, CEMLoss.pp_x0_generator) if self.mode == &#34;PP&#34; else (self.PN, CEMLoss.pn_x0_generator)
+            (self.PP, CEMLoss.pp_x0_generator)
+            if self.mode == &#34;PP&#34;
+            else (self.PN, CEMLoss.pn_x0_generator)
         )
+        if self.mode == &#34;PP&#34;:
+            self.get_loss, self._x0_generator = (self.PP, CEMLoss.pp_x0_generator)
+        elif self.mode == &#34;PN&#34;:
+            self.get_loss, self._x0_generator = (self.PN, CEMLoss.pn_x0_generator)
+        elif self.mode == &#34;PPSMOOTH&#34;:
+            self.get_loss, self._x0_generator = (
+                self.PP_smooth,
+                CEMLoss.pp_x0_generator,
+            )
+        else:
+            self.get_loss, self._x0_generator = (
+                self.PN_smooth,
+                CEMLoss.pn_x0_generator,
+            )
 
     def get_target_idx(self, org_img: np.ndarray) -&gt; int:
         &#34;&#34;&#34;Retrieves index of the originally classified class in the inference result
@@ -154,15 +201,17 @@ class CEMLoss(BaseExplanationModel):
         &#34;&#34;&#34;
         res = self.inference(org_img)
         assert res.ndim == 2, &#34;Inference result has to be an one dimensional array&#34;
-        assert len(res[0]) &gt; 2, &#34;Inference result has to represent at least two states&#34;
-        assert len(res) == 1, &#34;Loss class currently does not support batched calculations&#34;
+        assert len(res[0]) &gt;= 2, &#34;Inference result has to represent at least two states&#34;
+        assert (
+            len(res) == 1
+        ), &#34;Loss class currently does not support batched calculations&#34;
         return np.argmax(to_numpy(res))  # index of the original prediction
 
-    def get_loss(self, data: np.ndarray) -&gt; np.ndarray:
+    def get_loss(self, data: np.ndarray, *args, **kwargs) -&gt; np.ndarray:
         return super().get_loss(data)
 
     def PN(self, delta: np.ndarray) -&gt; np.ndarray:
-        &#34;&#34;&#34;_Pertinent negative_ loss function
+        &#34;&#34;&#34;_Pertinent Negative_ Loss Function
 
         Args:
             delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
@@ -175,7 +224,7 @@ class CEMLoss(BaseExplanationModel):
         return self.c * self.f_K_neg(delta) + self.gamma * self.PN_AE_error(delta)
 
     def PP(self, delta: np.ndarray) -&gt; np.ndarray:
-        &#34;&#34;&#34;Pertinent Positive loss function
+        &#34;&#34;&#34;_Pertinent Positive_ Loss Function
 
         Args:
             delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
@@ -186,6 +235,36 @@ class CEMLoss(BaseExplanationModel):
         # if delta.ndim &lt; 2:
         #     delta = np.ascontiguousarray(delta.reshape(self._org_img_shape))
         return self.c * self.f_K_pos(delta) + self.gamma * self.PP_AE_error(delta)
+
+    def PP_smooth(self, delta: np.ndarray) -&gt; np.ndarray:
+        &#34;&#34;&#34;_Smooth Pertinent Positive_ loss function
+
+        Args:
+            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            np.ndarray: PP loss value(s), 2D array of shape (bs, 1).
+        &#34;&#34;&#34;
+        # if delta.ndim &lt; 2:
+        #     delta = np.ascontiguousarray(delta.reshape(self._org_img_shape))
+        return self.c * self.f_K_pos_smooth(delta) + self.gamma * self.PP_AE_error(
+            delta
+        )
+
+    def PN_smooth(self, delta: np.ndarray) -&gt; np.ndarray:
+        &#34;&#34;&#34;_Smooth Pertinent Negative_ Loss Function
+
+        Args:
+            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            np.ndarray: PN loss value(s), 2D array of shape (bs, 1).
+        &#34;&#34;&#34;
+        # if delta.ndim &lt; 2:
+        #     delta = np.ascontiguousarray(delta.reshape(self._org_img_shape))
+        return self.c * self.f_K_neg_smooth(delta) + self.gamma * self.PN_AE_error(
+            delta
+        )
 
     def f_K_neg(self, delta: np.ndarray) -&gt; np.ndarray:
         &#34;&#34;&#34;f_K term for the pertinent negative
@@ -219,6 +298,44 @@ class CEMLoss(BaseExplanationModel):
             -self.K,
         )
 
+    def f_K_neg_smooth(self, delta: np.ndarray) -&gt; np.ndarray:
+        &#34;&#34;&#34;Smooth f_K term for the pertinent negative
+
+        Args:
+            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            np.ndarray: negative f_K term loss value, 2D array of shape (bs, 1).
+        &#34;&#34;&#34;
+        pred = self.inference(self.org_img + delta)
+        attack_value = loss_utils.np_extract_target_proba(
+            pred, self.target
+        ) - loss_utils.np_extract_nontarget_proba(pred, self.target)
+
+        if attack_value &lt; -10:
+            return np.log(1.0 + np.exp(attack_value))
+        else:
+            return attack_value + np.log(1.0 + np.exp(-attack_value))
+
+    def f_K_pos_smooth(self, delta: np.ndarray) -&gt; np.ndarray:
+        &#34;&#34;&#34;Smooth f_K term for the smooth pertinent positive
+
+        Args:
+            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            np.ndarray: positive f_K term loss value, 2D array of shape (bs, 1).
+        &#34;&#34;&#34;
+        pred = self.inference(delta)
+        attack_value = loss_utils.np_extract_target_proba(
+            pred, self.target
+        ) - loss_utils.np_extract_nontarget_proba(pred, self.target)
+
+        if attack_value &lt; -10:
+            return np.log(1.0 + np.exp(attack_value))
+        else:
+            return attack_value + np.log(1.0 + np.exp(-attack_value))
+
     def PN_AE_error(self, delta: np.ndarray) -&gt; np.ndarray:
         &#34;&#34;&#34;Autoencoder error term for the Pertinent Negative
 
@@ -231,7 +348,13 @@ class CEMLoss(BaseExplanationModel):
         if not self.AE:
             return 0.0
         adv_img = self.org_img + delta
-        return norm(norm(adv_img - to_numpy(self.AE(adv_img)), axis=self._c_dim), axis=(-2, -1)) ** 2
+        return (
+            norm(
+                norm(adv_img - to_numpy(self.AE(adv_img)), axis=self._c_dim),
+                axis=(-2, -1),
+            )
+            ** 2
+        )
 
     def PP_AE_error(self, delta: np.ndarray) -&gt; np.ndarray:
         &#34;&#34;&#34;Autoencoder error term for the Pertinent Positive
@@ -244,7 +367,13 @@ class CEMLoss(BaseExplanationModel):
         &#34;&#34;&#34;
         if not self.AE:
             return 0.0
-        return norm(norm(delta - to_numpy(self.AE(delta)), axis=self._c_dim), axis=(-2, -1)) ** 2</code></pre>
+        return (
+            norm(
+                norm(delta - to_numpy(self.AE(delta)), axis=self._c_dim),
+                axis=(-2, -1),
+            )
+            ** 2
+        )</code></pre>
 </details>
 </section>
 <section>
@@ -258,7 +387,7 @@ class CEMLoss(BaseExplanationModel):
 <dl>
 <dt id="maxi.lib.loss.cem_loss.CEMLoss"><code class="flex name class">
 <span>class <span class="ident">CEMLoss</span></span>
-<span>(</span><span>mode: str, org_img: numpy.ndarray, inference: Callable[[Union[List[numpy.ndarray], numpy.ndarray, str]], numpy.ndarray], c: float, gamma: float, K: float, AE: Callable[[numpy.ndarray], numpy.ndarray] = None, lower: numpy.ndarray = None, upper: numpy.ndarray = None, channels_first: bool = False)</span>
+<span>(</span><span>mode: str, org_img: numpy.ndarray, inference: Callable[[Union[List[numpy.ndarray], numpy.ndarray, str]], numpy.ndarray], c: float = 1.0, gamma: float = 10, K: float = 10, AE: Callable[[numpy.ndarray], numpy.ndarray] = None, lower: numpy.ndarray = None, upper: numpy.ndarray = None, channels_first: bool = False, *args, **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Helper class that provides a standard way to create an ABC using
@@ -272,53 +401,61 @@ inheritance.</p>
 <dt><strong><code>mode</code></strong> :&ensp;<code>str</code></dt>
 <dd>Chose between "PP" for <em>pertinent positive</em> / "PN" for <em>pertinent negative</em>.</dd>
 <dt><strong><code>org_img</code></strong> :&ensp;<code>ndarray</code></dt>
-<dd>Original image [width, height, channels]</dd>
+<dd>Original image [width, height, channels] or [channels, width, height].</dd>
 <dt><strong><code>inference</code></strong> :&ensp;<code>InferenceCall</code></dt>
 <dd>Inference method of an external prediction entity. Has to return an
 interpretable representation of the underlying prediction, e.g. a binary vector indicating
 the “presence” or “absence”.</dd>
-<dt><strong><code>c</code></strong> :&ensp;<code>float</code></dt>
+<dt><strong><code>c</code></strong> :&ensp;<code>float</code>, optional</dt>
 <dd>$$f_K$$ regularization coefficient.</dd>
-<dt><strong><code>gamma</code></strong> :&ensp;<code>float</code></dt>
+<dt><strong><code>gamma</code></strong> :&ensp;<code>float</code>, optional</dt>
 <dd>Regularization coefficient for the autoencoder term.</dd>
-<dt><strong><code>K</code></strong> :&ensp;<code>float</code></dt>
+<dt><strong><code>K</code></strong> :&ensp;<code>float</code>, optional</dt>
 <dd>Confidence parameter for seperation between probability of target and non-target value.</dd>
 <dt><strong><code>AE</code></strong> :&ensp;<code>Callable[[ndarray], ndarray]</code></dt>
 <dd>Autoencoder, if None disregard AE error term.</dd>
 <dt><strong><code>lower</code></strong> :&ensp;<code>np.ndarray</code>, optional</dt>
 <dd>Lower bound for the optimization. Has to be of the same shape as the
-target image.</dd>
+target image. Defaults to None.</dd>
 <dt><strong><code>upper</code></strong> :&ensp;<code>np.ndarray</code>, optional</dt>
 <dd>Upper bound for the optimization. Has to be of the same shape as the
-target image.</dd>
+target image. Defaults to None.</dd>
 <dt><strong><code>channels_first</code></strong> :&ensp;<code>bool</code>, optional</dt>
 <dd>Whether the channels dimension comes before the width and height
 dimensions as in [bs, channels, width, height].</dd>
 </dl>
+<p>Configurable Parameters:
+c, gamma, K, AE, channels_first</p>
 <h2 id="note">Note</h2>
 <p>The hardcoded lower and upper bounds in <code>_init_lower_upper()</code> are tailored for images with
-pixel range of -0.5 to 0.5. For other ranges, it is required to specify it accordingly.
+pixel range of [0, 1] or [0, 255]. For other ranges, it is required to specify it accordingly.
 Otherwise it might strongly adulterate the results.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">class CEMLoss(BaseExplanationModel):
-    compatible_grad_methods = [URVGradientEstimator]
-    pp_x0_generator, pn_x0_generator = x0_generators.generate_rand_image, np.zeros_like
+    compatible_grad_methods = [URVGradientEstimator, USRVGradientEstimator]
+    # pp_x0_generator, pn_x0_generator = lambda x: x, np.zeros_like
+    pp_x0_generator, pn_x0_generator = (
+        lambda x: x,
+        loss_utils.generate_from_gaussian,
+    )
 
     def __init__(
         self,
         mode: str,
         org_img: np.ndarray,
         inference: InferenceCall,
-        c: float,
-        gamma: float,
-        K: float,
+        c: float = 1.0,
+        gamma: float = 10,
+        K: float = 10,
         AE: Callable[[np.ndarray], np.ndarray] = None,
         lower: np.ndarray = None,
         upper: np.ndarray = None,
         channels_first: bool = False,
+        *args,
+        **kwargs,
     ):
         &#34;&#34;&#34; Loss function of the Contrastive-Explanation-Method
 
@@ -328,25 +465,29 @@ Otherwise it might strongly adulterate the results.</p></div>
 
         Args:
             mode (str): Chose between &#34;PP&#34; for _pertinent positive_ / &#34;PN&#34; for _pertinent negative_.
-            org_img (ndarray): Original image [width, height, channels]
+            org_img (ndarray): Original image [width, height, channels] or [channels, width, height].
             inference (InferenceCall): Inference method of an external prediction entity. Has to return an \
                 interpretable representation of the underlying prediction, e.g. a binary vector indicating \
                 the “presence” or “absence”.
-            c (float): $$f_K$$ regularization coefficient.
-            gamma (float): Regularization coefficient for the autoencoder term.
-            K (float): Confidence parameter for seperation between probability of target and non-target value.
+            c (float, optional): $$f_K$$ regularization coefficient.
+            gamma (float, optional): Regularization coefficient for the autoencoder term.
+            K (float, optional): Confidence parameter for seperation between probability of target and non-target value.
             AE (Callable[[ndarray], ndarray]): Autoencoder, if None disregard AE error term.
             lower (np.ndarray, optional): Lower bound for the optimization. Has to be of the same shape as the \
-                target image.
+                target image. Defaults to None.
             upper (np.ndarray, optional): Upper bound for the optimization. Has to be of the same shape as the \
-                target image.
+                target image. Defaults to None.
             channels_first (bool, optional): Whether the channels dimension comes before the width and height \
                 dimensions as in [bs, channels, width, height].
             
+        Configurable Parameters:
+            c, gamma, K, AE, channels_first
+            
         Note:
             The hardcoded lower and upper bounds in ```_init_lower_upper()``` are tailored for images with \
-            pixel range of -0.5 to 0.5. For other ranges, it is required to specify it accordingly.\
+            pixel range of [0, 1] or [0, 255]. For other ranges, it is required to specify it accordingly.\
             Otherwise it might strongly adulterate the results.
+            
         &#34;&#34;&#34;
         self._setup_mode(mode)
         self._init_lower_upper(lower, upper, org_img)
@@ -367,23 +508,36 @@ Otherwise it might strongly adulterate the results.</p></div>
         # channel dimension
         self._c_dim = 1 if channels_first else -1  # 1 channels first, -1 channels last
 
-    def _init_lower_upper(self, lower: Tuple[None, np.ndarray], upper: Tuple[None, np.ndarray], org_img: np.ndarray):
+    def _init_lower_upper(
+        self,
+        lower: Union[None, np.ndarray],
+        upper: Union[None, np.ndarray],
+        org_img: np.ndarray,
+    ):
         DEFAULT_LB_UB = {
             &#34;PP&#34;: {
-                &#34;lower&#34;: np.full(org_img.shape, np.min(org_img)),
-                &#34;upper&#34;: org_img if type(org_img) is np.ndarray else org_img.numpy(),
+                &#34;lower&#34;: np.full(org_img.shape, 0.0),
+                # &#34;lower&#34;: np.zeros(org_img.shape),
+                &#34;upper&#34;: to_numpy(org_img),
             },
             &#34;PN&#34;: {
-                &#34;lower&#34;: np.where(org_img &gt; 0, 0.0, 0.0),
-                &#34;upper&#34;: np.where(org_img &lt; 0, 1, 0.0),
+                &#34;lower&#34;: np.full(org_img.shape, -1.0),
+                # &#34;upper&#34;: 1.0 - to_numpy(org_img),
+                &#34;upper&#34;: np.full(org_img.shape, 1.0),
             },
         }
+        DEFAULT_LB_UB[&#34;PPSMOOTH&#34;] = DEFAULT_LB_UB[&#34;PP&#34;]
+        DEFAULT_LB_UB[&#34;PNSMOOTH&#34;] = DEFAULT_LB_UB[&#34;PN&#34;]
 
         self._lower = DEFAULT_LB_UB[self.mode][&#34;lower&#34;] if lower is None else lower
         self._upper = DEFAULT_LB_UB[self.mode][&#34;upper&#34;] if upper is None else upper
 
-        assert type(self._lower) is np.ndarray, &#34;Invalid lower bound given for optimization&#34;
-        assert type(self._upper) is np.ndarray, &#34;Invalid upper bound given for optimization&#34;
+        assert (
+            type(self._lower) is np.ndarray
+        ), &#34;Invalid lower bound given for optimization&#34;
+        assert (
+            type(self._upper) is np.ndarray
+        ), &#34;Invalid upper bound given for optimization&#34;
 
         if self._lower.shape != org_img.shape:
             raise ValueError(
@@ -396,12 +550,33 @@ Otherwise it might strongly adulterate the results.</p></div>
             )
 
     def _setup_mode(self, input: str):
-        assert input.upper() in [&#34;PP&#34;, &#34;PN&#34;], &#34;Provided unknown mode for CEM&#34;
+        assert input.upper() in {
+            &#34;PP&#34;,
+            &#34;PN&#34;,
+            &#34;PPSMOOTH&#34;,
+            &#34;PNSMOOTH&#34;,
+        }, &#34;Provided unknown mode for CEM&#34;
         self.mode = input.upper()
 
         self.get_loss, self._x0_generator = (
-            (self.PP, CEMLoss.pp_x0_generator) if self.mode == &#34;PP&#34; else (self.PN, CEMLoss.pn_x0_generator)
+            (self.PP, CEMLoss.pp_x0_generator)
+            if self.mode == &#34;PP&#34;
+            else (self.PN, CEMLoss.pn_x0_generator)
         )
+        if self.mode == &#34;PP&#34;:
+            self.get_loss, self._x0_generator = (self.PP, CEMLoss.pp_x0_generator)
+        elif self.mode == &#34;PN&#34;:
+            self.get_loss, self._x0_generator = (self.PN, CEMLoss.pn_x0_generator)
+        elif self.mode == &#34;PPSMOOTH&#34;:
+            self.get_loss, self._x0_generator = (
+                self.PP_smooth,
+                CEMLoss.pp_x0_generator,
+            )
+        else:
+            self.get_loss, self._x0_generator = (
+                self.PN_smooth,
+                CEMLoss.pn_x0_generator,
+            )
 
     def get_target_idx(self, org_img: np.ndarray) -&gt; int:
         &#34;&#34;&#34;Retrieves index of the originally classified class in the inference result
@@ -414,15 +589,17 @@ Otherwise it might strongly adulterate the results.</p></div>
         &#34;&#34;&#34;
         res = self.inference(org_img)
         assert res.ndim == 2, &#34;Inference result has to be an one dimensional array&#34;
-        assert len(res[0]) &gt; 2, &#34;Inference result has to represent at least two states&#34;
-        assert len(res) == 1, &#34;Loss class currently does not support batched calculations&#34;
+        assert len(res[0]) &gt;= 2, &#34;Inference result has to represent at least two states&#34;
+        assert (
+            len(res) == 1
+        ), &#34;Loss class currently does not support batched calculations&#34;
         return np.argmax(to_numpy(res))  # index of the original prediction
 
-    def get_loss(self, data: np.ndarray) -&gt; np.ndarray:
+    def get_loss(self, data: np.ndarray, *args, **kwargs) -&gt; np.ndarray:
         return super().get_loss(data)
 
     def PN(self, delta: np.ndarray) -&gt; np.ndarray:
-        &#34;&#34;&#34;_Pertinent negative_ loss function
+        &#34;&#34;&#34;_Pertinent Negative_ Loss Function
 
         Args:
             delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
@@ -435,7 +612,7 @@ Otherwise it might strongly adulterate the results.</p></div>
         return self.c * self.f_K_neg(delta) + self.gamma * self.PN_AE_error(delta)
 
     def PP(self, delta: np.ndarray) -&gt; np.ndarray:
-        &#34;&#34;&#34;Pertinent Positive loss function
+        &#34;&#34;&#34;_Pertinent Positive_ Loss Function
 
         Args:
             delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
@@ -446,6 +623,36 @@ Otherwise it might strongly adulterate the results.</p></div>
         # if delta.ndim &lt; 2:
         #     delta = np.ascontiguousarray(delta.reshape(self._org_img_shape))
         return self.c * self.f_K_pos(delta) + self.gamma * self.PP_AE_error(delta)
+
+    def PP_smooth(self, delta: np.ndarray) -&gt; np.ndarray:
+        &#34;&#34;&#34;_Smooth Pertinent Positive_ loss function
+
+        Args:
+            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            np.ndarray: PP loss value(s), 2D array of shape (bs, 1).
+        &#34;&#34;&#34;
+        # if delta.ndim &lt; 2:
+        #     delta = np.ascontiguousarray(delta.reshape(self._org_img_shape))
+        return self.c * self.f_K_pos_smooth(delta) + self.gamma * self.PP_AE_error(
+            delta
+        )
+
+    def PN_smooth(self, delta: np.ndarray) -&gt; np.ndarray:
+        &#34;&#34;&#34;_Smooth Pertinent Negative_ Loss Function
+
+        Args:
+            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            np.ndarray: PN loss value(s), 2D array of shape (bs, 1).
+        &#34;&#34;&#34;
+        # if delta.ndim &lt; 2:
+        #     delta = np.ascontiguousarray(delta.reshape(self._org_img_shape))
+        return self.c * self.f_K_neg_smooth(delta) + self.gamma * self.PN_AE_error(
+            delta
+        )
 
     def f_K_neg(self, delta: np.ndarray) -&gt; np.ndarray:
         &#34;&#34;&#34;f_K term for the pertinent negative
@@ -479,6 +686,44 @@ Otherwise it might strongly adulterate the results.</p></div>
             -self.K,
         )
 
+    def f_K_neg_smooth(self, delta: np.ndarray) -&gt; np.ndarray:
+        &#34;&#34;&#34;Smooth f_K term for the pertinent negative
+
+        Args:
+            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            np.ndarray: negative f_K term loss value, 2D array of shape (bs, 1).
+        &#34;&#34;&#34;
+        pred = self.inference(self.org_img + delta)
+        attack_value = loss_utils.np_extract_target_proba(
+            pred, self.target
+        ) - loss_utils.np_extract_nontarget_proba(pred, self.target)
+
+        if attack_value &lt; -10:
+            return np.log(1.0 + np.exp(attack_value))
+        else:
+            return attack_value + np.log(1.0 + np.exp(-attack_value))
+
+    def f_K_pos_smooth(self, delta: np.ndarray) -&gt; np.ndarray:
+        &#34;&#34;&#34;Smooth f_K term for the smooth pertinent positive
+
+        Args:
+            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            np.ndarray: positive f_K term loss value, 2D array of shape (bs, 1).
+        &#34;&#34;&#34;
+        pred = self.inference(delta)
+        attack_value = loss_utils.np_extract_target_proba(
+            pred, self.target
+        ) - loss_utils.np_extract_nontarget_proba(pred, self.target)
+
+        if attack_value &lt; -10:
+            return np.log(1.0 + np.exp(attack_value))
+        else:
+            return attack_value + np.log(1.0 + np.exp(-attack_value))
+
     def PN_AE_error(self, delta: np.ndarray) -&gt; np.ndarray:
         &#34;&#34;&#34;Autoencoder error term for the Pertinent Negative
 
@@ -491,7 +736,13 @@ Otherwise it might strongly adulterate the results.</p></div>
         if not self.AE:
             return 0.0
         adv_img = self.org_img + delta
-        return norm(norm(adv_img - to_numpy(self.AE(adv_img)), axis=self._c_dim), axis=(-2, -1)) ** 2
+        return (
+            norm(
+                norm(adv_img - to_numpy(self.AE(adv_img)), axis=self._c_dim),
+                axis=(-2, -1),
+            )
+            ** 2
+        )
 
     def PP_AE_error(self, delta: np.ndarray) -&gt; np.ndarray:
         &#34;&#34;&#34;Autoencoder error term for the Pertinent Positive
@@ -504,7 +755,13 @@ Otherwise it might strongly adulterate the results.</p></div>
         &#34;&#34;&#34;
         if not self.AE:
             return 0.0
-        return norm(norm(delta - to_numpy(self.AE(delta)), axis=self._c_dim), axis=(-2, -1)) ** 2</code></pre>
+        return (
+            norm(
+                norm(delta - to_numpy(self.AE(delta)), axis=self._c_dim),
+                axis=(-2, -1),
+            )
+            ** 2
+        )</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
@@ -529,7 +786,7 @@ Otherwise it might strongly adulterate the results.</p></div>
 <span>def <span class="ident">PN</span></span>(<span>self, delta: numpy.ndarray) ‑> numpy.ndarray</span>
 </code></dt>
 <dd>
-<div class="desc"><p><em>Pertinent negative</em> loss function</p>
+<div class="desc"><p><em>Pertinent Negative</em> Loss Function</p>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>delta</code></strong> :&ensp;<code>np.ndarray</code></dt>
@@ -545,7 +802,7 @@ Otherwise it might strongly adulterate the results.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def PN(self, delta: np.ndarray) -&gt; np.ndarray:
-    &#34;&#34;&#34;_Pertinent negative_ loss function
+    &#34;&#34;&#34;_Pertinent Negative_ Loss Function
 
     Args:
         delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
@@ -589,14 +846,55 @@ Otherwise it might strongly adulterate the results.</p></div>
     if not self.AE:
         return 0.0
     adv_img = self.org_img + delta
-    return norm(norm(adv_img - to_numpy(self.AE(adv_img)), axis=self._c_dim), axis=(-2, -1)) ** 2</code></pre>
+    return (
+        norm(
+            norm(adv_img - to_numpy(self.AE(adv_img)), axis=self._c_dim),
+            axis=(-2, -1),
+        )
+        ** 2
+    )</code></pre>
+</details>
+</dd>
+<dt id="maxi.lib.loss.cem_loss.CEMLoss.PN_smooth"><code class="name flex">
+<span>def <span class="ident">PN_smooth</span></span>(<span>self, delta: numpy.ndarray) ‑> numpy.ndarray</span>
+</code></dt>
+<dd>
+<div class="desc"><p><em>Smooth Pertinent Negative</em> Loss Function</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>delta</code></strong> :&ensp;<code>np.ndarray</code></dt>
+<dd>Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>np.ndarray</code></dt>
+<dd>PN loss value(s), 2D array of shape (bs, 1).</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def PN_smooth(self, delta: np.ndarray) -&gt; np.ndarray:
+    &#34;&#34;&#34;_Smooth Pertinent Negative_ Loss Function
+
+    Args:
+        delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+    Returns:
+        np.ndarray: PN loss value(s), 2D array of shape (bs, 1).
+    &#34;&#34;&#34;
+    # if delta.ndim &lt; 2:
+    #     delta = np.ascontiguousarray(delta.reshape(self._org_img_shape))
+    return self.c * self.f_K_neg_smooth(delta) + self.gamma * self.PN_AE_error(
+        delta
+    )</code></pre>
 </details>
 </dd>
 <dt id="maxi.lib.loss.cem_loss.CEMLoss.PP"><code class="name flex">
 <span>def <span class="ident">PP</span></span>(<span>self, delta: numpy.ndarray) ‑> numpy.ndarray</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Pertinent Positive loss function</p>
+<div class="desc"><p><em>Pertinent Positive</em> Loss Function</p>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>delta</code></strong> :&ensp;<code>np.ndarray</code></dt>
@@ -612,7 +910,7 @@ Otherwise it might strongly adulterate the results.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def PP(self, delta: np.ndarray) -&gt; np.ndarray:
-    &#34;&#34;&#34;Pertinent Positive loss function
+    &#34;&#34;&#34;_Pertinent Positive_ Loss Function
 
     Args:
         delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
@@ -655,7 +953,48 @@ Otherwise it might strongly adulterate the results.</p></div>
     &#34;&#34;&#34;
     if not self.AE:
         return 0.0
-    return norm(norm(delta - to_numpy(self.AE(delta)), axis=self._c_dim), axis=(-2, -1)) ** 2</code></pre>
+    return (
+        norm(
+            norm(delta - to_numpy(self.AE(delta)), axis=self._c_dim),
+            axis=(-2, -1),
+        )
+        ** 2
+    )</code></pre>
+</details>
+</dd>
+<dt id="maxi.lib.loss.cem_loss.CEMLoss.PP_smooth"><code class="name flex">
+<span>def <span class="ident">PP_smooth</span></span>(<span>self, delta: numpy.ndarray) ‑> numpy.ndarray</span>
+</code></dt>
+<dd>
+<div class="desc"><p><em>Smooth Pertinent Positive</em> loss function</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>delta</code></strong> :&ensp;<code>np.ndarray</code></dt>
+<dd>Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>np.ndarray</code></dt>
+<dd>PP loss value(s), 2D array of shape (bs, 1).</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def PP_smooth(self, delta: np.ndarray) -&gt; np.ndarray:
+    &#34;&#34;&#34;_Smooth Pertinent Positive_ loss function
+
+    Args:
+        delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+    Returns:
+        np.ndarray: PP loss value(s), 2D array of shape (bs, 1).
+    &#34;&#34;&#34;
+    # if delta.ndim &lt; 2:
+    #     delta = np.ascontiguousarray(delta.reshape(self._org_img_shape))
+    return self.c * self.f_K_pos_smooth(delta) + self.gamma * self.PP_AE_error(
+        delta
+    )</code></pre>
 </details>
 </dd>
 <dt id="maxi.lib.loss.cem_loss.CEMLoss.f_K_neg"><code class="name flex">
@@ -694,6 +1033,45 @@ Otherwise it might strongly adulterate the results.</p></div>
     )</code></pre>
 </details>
 </dd>
+<dt id="maxi.lib.loss.cem_loss.CEMLoss.f_K_neg_smooth"><code class="name flex">
+<span>def <span class="ident">f_K_neg_smooth</span></span>(<span>self, delta: numpy.ndarray) ‑> numpy.ndarray</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Smooth f_K term for the pertinent negative</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>delta</code></strong> :&ensp;<code>np.ndarray</code></dt>
+<dd>Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>np.ndarray</code></dt>
+<dd>negative f_K term loss value, 2D array of shape (bs, 1).</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def f_K_neg_smooth(self, delta: np.ndarray) -&gt; np.ndarray:
+    &#34;&#34;&#34;Smooth f_K term for the pertinent negative
+
+    Args:
+        delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+    Returns:
+        np.ndarray: negative f_K term loss value, 2D array of shape (bs, 1).
+    &#34;&#34;&#34;
+    pred = self.inference(self.org_img + delta)
+    attack_value = loss_utils.np_extract_target_proba(
+        pred, self.target
+    ) - loss_utils.np_extract_nontarget_proba(pred, self.target)
+
+    if attack_value &lt; -10:
+        return np.log(1.0 + np.exp(attack_value))
+    else:
+        return attack_value + np.log(1.0 + np.exp(-attack_value))</code></pre>
+</details>
+</dd>
 <dt id="maxi.lib.loss.cem_loss.CEMLoss.f_K_pos"><code class="name flex">
 <span>def <span class="ident">f_K_pos</span></span>(<span>self, delta: numpy.ndarray) ‑> numpy.ndarray</span>
 </code></dt>
@@ -730,6 +1108,45 @@ Otherwise it might strongly adulterate the results.</p></div>
     )</code></pre>
 </details>
 </dd>
+<dt id="maxi.lib.loss.cem_loss.CEMLoss.f_K_pos_smooth"><code class="name flex">
+<span>def <span class="ident">f_K_pos_smooth</span></span>(<span>self, delta: numpy.ndarray) ‑> numpy.ndarray</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Smooth f_K term for the smooth pertinent positive</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>delta</code></strong> :&ensp;<code>np.ndarray</code></dt>
+<dd>Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>np.ndarray</code></dt>
+<dd>positive f_K term loss value, 2D array of shape (bs, 1).</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def f_K_pos_smooth(self, delta: np.ndarray) -&gt; np.ndarray:
+    &#34;&#34;&#34;Smooth f_K term for the smooth pertinent positive
+
+    Args:
+        delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+    Returns:
+        np.ndarray: positive f_K term loss value, 2D array of shape (bs, 1).
+    &#34;&#34;&#34;
+    pred = self.inference(delta)
+    attack_value = loss_utils.np_extract_target_proba(
+        pred, self.target
+    ) - loss_utils.np_extract_nontarget_proba(pred, self.target)
+
+    if attack_value &lt; -10:
+        return np.log(1.0 + np.exp(attack_value))
+    else:
+        return attack_value + np.log(1.0 + np.exp(-attack_value))</code></pre>
+</details>
+</dd>
 <dt id="maxi.lib.loss.cem_loss.CEMLoss.get_target_idx"><code class="name flex">
 <span>def <span class="ident">get_target_idx</span></span>(<span>self, org_img: numpy.ndarray) ‑> int</span>
 </code></dt>
@@ -760,195 +1177,36 @@ Otherwise it might strongly adulterate the results.</p></div>
     &#34;&#34;&#34;
     res = self.inference(org_img)
     assert res.ndim == 2, &#34;Inference result has to be an one dimensional array&#34;
-    assert len(res[0]) &gt; 2, &#34;Inference result has to represent at least two states&#34;
-    assert len(res) == 1, &#34;Loss class currently does not support batched calculations&#34;
+    assert len(res[0]) &gt;= 2, &#34;Inference result has to represent at least two states&#34;
+    assert (
+        len(res) == 1
+    ), &#34;Loss class currently does not support batched calculations&#34;
     return np.argmax(to_numpy(res))  # index of the original prediction</code></pre>
 </details>
 </dd>
 <dt id="maxi.lib.loss.cem_loss.CEMLoss.pn_x0_generator"><code class="name flex">
-<span>def <span class="ident">pn_x0_generator</span></span>(<span>a, dtype=None, order='K', subok=True, shape=None)</span>
+<span>def <span class="ident">pn_x0_generator</span></span>(<span>data: numpy.ndarray) ‑> numpy.ndarray</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Return an array of zeros with the same shape and type as a given array.</p>
-<h2 id="parameters">Parameters</h2>
-<dl>
-<dt><strong><code>a</code></strong> :&ensp;<code>array_like</code></dt>
-<dd>The shape and data-type of <code>a</code> define these same attributes of
-the returned array.</dd>
-<dt><strong><code>dtype</code></strong> :&ensp;<code>data-type</code>, optional</dt>
-<dd>
-<p>Overrides the data type of the result.</p>
-<div class="admonition versionadded">
-<p class="admonition-title">Added in version:&ensp;1.6.0</p>
-</div>
-</dd>
-<dt><strong><code>order</code></strong> :&ensp;<code>{'C', 'F', 'A',</code> or <code>'K'}</code>, optional</dt>
-<dd>
-<p>Overrides the memory layout of the result. 'C' means C-order,
-'F' means F-order, 'A' means 'F' if <code>a</code> is Fortran contiguous,
-'C' otherwise. 'K' means match the layout of <code>a</code> as closely
-as possible.</p>
-<div class="admonition versionadded">
-<p class="admonition-title">Added in version:&ensp;1.6.0</p>
-</div>
-</dd>
-</dl>
-<p>subok : bool, optional.
-If True, then the newly created array will use the sub-class
-type of <code>a</code>, otherwise it will be a base-class array. Defaults
-to True.
-shape : int or sequence of ints, optional.
-Overrides the shape of the result. If order='K' and the number of
-dimensions is unchanged, will try to keep order, otherwise,
-order='C' is implied.</p>
-<pre><code>!!! versionadded "Added in version:&amp;ensp;1.17.0"
-</code></pre>
-<h2 id="returns">Returns</h2>
-<dl>
-<dt><strong><code>out</code></strong> :&ensp;<code>ndarray</code></dt>
-<dd>Array of zeros with the same shape and type as <code>a</code>.</dd>
-</dl>
-<h2 id="see-also">See Also</h2>
-<dl>
-<dt><code>empty_like</code></dt>
-<dd>Return an empty array with shape and type of input.</dd>
-<dt><code>ones_like</code></dt>
-<dd>Return an array of ones with shape and type of input.</dd>
-<dt><code>full_like</code></dt>
-<dd>Return a new array with shape of input filled with value.</dd>
-<dt><code>zeros</code></dt>
-<dd>Return a new array setting values to zero.</dd>
-</dl>
-<h2 id="examples">Examples</h2>
-<pre><code class="language-python-repl">&gt;&gt;&gt; x = np.arange(6)
-&gt;&gt;&gt; x = x.reshape((2, 3))
-&gt;&gt;&gt; x
-array([[0, 1, 2],
-       [3, 4, 5]])
-&gt;&gt;&gt; np.zeros_like(x)
-array([[0, 0, 0],
-       [0, 0, 0]])
-</code></pre>
-<pre><code class="language-python-repl">&gt;&gt;&gt; y = np.arange(3, dtype=float)
-&gt;&gt;&gt; y
-array([0., 1., 2.])
-&gt;&gt;&gt; np.zeros_like(y)
-array([0.,  0.,  0.])
-</code></pre></div>
+<div class="desc"></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">@array_function_dispatch(_zeros_like_dispatcher)
-def zeros_like(a, dtype=None, order=&#39;K&#39;, subok=True, shape=None):
-    &#34;&#34;&#34;
-    Return an array of zeros with the same shape and type as a given array.
-
-    Parameters
-    ----------
-    a : array_like
-        The shape and data-type of `a` define these same attributes of
-        the returned array.
-    dtype : data-type, optional
-        Overrides the data type of the result.
-
-        .. versionadded:: 1.6.0
-    order : {&#39;C&#39;, &#39;F&#39;, &#39;A&#39;, or &#39;K&#39;}, optional
-        Overrides the memory layout of the result. &#39;C&#39; means C-order,
-        &#39;F&#39; means F-order, &#39;A&#39; means &#39;F&#39; if `a` is Fortran contiguous,
-        &#39;C&#39; otherwise. &#39;K&#39; means match the layout of `a` as closely
-        as possible.
-
-        .. versionadded:: 1.6.0
-    subok : bool, optional.
-        If True, then the newly created array will use the sub-class
-        type of `a`, otherwise it will be a base-class array. Defaults
-        to True.
-    shape : int or sequence of ints, optional.
-        Overrides the shape of the result. If order=&#39;K&#39; and the number of
-        dimensions is unchanged, will try to keep order, otherwise,
-        order=&#39;C&#39; is implied.
-
-        .. versionadded:: 1.17.0
-
-    Returns
-    -------
-    out : ndarray
-        Array of zeros with the same shape and type as `a`.
-
-    See Also
-    --------
-    empty_like : Return an empty array with shape and type of input.
-    ones_like : Return an array of ones with shape and type of input.
-    full_like : Return a new array with shape of input filled with value.
-    zeros : Return a new array setting values to zero.
-
-    Examples
-    --------
-    &gt;&gt;&gt; x = np.arange(6)
-    &gt;&gt;&gt; x = x.reshape((2, 3))
-    &gt;&gt;&gt; x
-    array([[0, 1, 2],
-           [3, 4, 5]])
-    &gt;&gt;&gt; np.zeros_like(x)
-    array([[0, 0, 0],
-           [0, 0, 0]])
-
-    &gt;&gt;&gt; y = np.arange(3, dtype=float)
-    &gt;&gt;&gt; y
-    array([0., 1., 2.])
-    &gt;&gt;&gt; np.zeros_like(y)
-    array([0.,  0.,  0.])
-
-    &#34;&#34;&#34;
-    res = empty_like(a, dtype=dtype, order=order, subok=subok, shape=shape)
-    # needed instead of a 0 to get same result as zeros for for string dtypes
-    z = zeros(1, dtype=res.dtype)
-    multiarray.copyto(res, z, casting=&#39;unsafe&#39;)
-    return res</code></pre>
+<pre><code class="python">def generate_from_gaussian(data: np.ndarray) -&gt; np.ndarray:
+    return np.random.normal(loc=0.0, scale=1, size=data.shape)</code></pre>
 </details>
 </dd>
 <dt id="maxi.lib.loss.cem_loss.CEMLoss.pp_x0_generator"><code class="name flex">
-<span>def <span class="ident">pp_x0_generator</span></span>(<span>original_image: numpy.ndarray) ‑> numpy.ndarray</span>
+<span>def <span class="ident">pp_x0_generator</span></span>(<span>x)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Generates an array where each index is drawn from the range between lowest value in the image
-and the respective pixel value.</p>
-<h2 id="args">Args</h2>
-<dl>
-<dt><strong><code>original_image</code></strong> :&ensp;<code>np.ndarray</code></dt>
-<dd>Reference image in [width, height, channels]</dd>
-</dl>
-<h2 id="returns">Returns</h2>
-<dl>
-<dt><code>np.ndarray</code></dt>
-<dd>Random image drawn from respective pixel range.</dd>
-</dl></div>
+<div class="desc"></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def generate_rand_image(original_image: np.ndarray) -&gt; np.ndarray:
-    &#34;&#34;&#34;Generates an array where each index is drawn from the range between lowest value in the image\
-        and the respective pixel value.
-
-    Args:
-        original_image (np.ndarray): Reference image in [width, height, channels]
-
-    Returns:
-        np.ndarray: Random image drawn from respective pixel range.
-    &#34;&#34;&#34;
-    flattened_image = original_image.flatten()
-    low_high = [None] * len(flattened_image)
-
-    for i, entry in enumerate(np.nditer(flattened_image)):
-        low_high[i] = {&#34;a&#34;: np.min(original_image), &#34;b&#34;: entry}
-
-    flatten_res = np.array([uniform(**lh) for lh in low_high], dtype=original_image.dtype)
-
-    if original_image.ndim &gt; 1:
-        return np.ascontiguousarray(flatten_res.reshape(original_image.shape))
-    return flatten_res</code></pre>
+<pre><code class="python">lambda x: x,</code></pre>
 </details>
 </dd>
 </dl>
@@ -982,11 +1240,15 @@ and the respective pixel value.</p>
 <ul class="">
 <li><code><a title="maxi.lib.loss.cem_loss.CEMLoss.PN" href="#maxi.lib.loss.cem_loss.CEMLoss.PN">PN</a></code></li>
 <li><code><a title="maxi.lib.loss.cem_loss.CEMLoss.PN_AE_error" href="#maxi.lib.loss.cem_loss.CEMLoss.PN_AE_error">PN_AE_error</a></code></li>
+<li><code><a title="maxi.lib.loss.cem_loss.CEMLoss.PN_smooth" href="#maxi.lib.loss.cem_loss.CEMLoss.PN_smooth">PN_smooth</a></code></li>
 <li><code><a title="maxi.lib.loss.cem_loss.CEMLoss.PP" href="#maxi.lib.loss.cem_loss.CEMLoss.PP">PP</a></code></li>
 <li><code><a title="maxi.lib.loss.cem_loss.CEMLoss.PP_AE_error" href="#maxi.lib.loss.cem_loss.CEMLoss.PP_AE_error">PP_AE_error</a></code></li>
+<li><code><a title="maxi.lib.loss.cem_loss.CEMLoss.PP_smooth" href="#maxi.lib.loss.cem_loss.CEMLoss.PP_smooth">PP_smooth</a></code></li>
 <li><code><a title="maxi.lib.loss.cem_loss.CEMLoss.compatible_grad_methods" href="#maxi.lib.loss.cem_loss.CEMLoss.compatible_grad_methods">compatible_grad_methods</a></code></li>
 <li><code><a title="maxi.lib.loss.cem_loss.CEMLoss.f_K_neg" href="#maxi.lib.loss.cem_loss.CEMLoss.f_K_neg">f_K_neg</a></code></li>
+<li><code><a title="maxi.lib.loss.cem_loss.CEMLoss.f_K_neg_smooth" href="#maxi.lib.loss.cem_loss.CEMLoss.f_K_neg_smooth">f_K_neg_smooth</a></code></li>
 <li><code><a title="maxi.lib.loss.cem_loss.CEMLoss.f_K_pos" href="#maxi.lib.loss.cem_loss.CEMLoss.f_K_pos">f_K_pos</a></code></li>
+<li><code><a title="maxi.lib.loss.cem_loss.CEMLoss.f_K_pos_smooth" href="#maxi.lib.loss.cem_loss.CEMLoss.f_K_pos_smooth">f_K_pos_smooth</a></code></li>
 <li><code><a title="maxi.lib.loss.cem_loss.CEMLoss.get_target_idx" href="#maxi.lib.loss.cem_loss.CEMLoss.get_target_idx">get_target_idx</a></code></li>
 <li><code><a title="maxi.lib.loss.cem_loss.CEMLoss.pn_x0_generator" href="#maxi.lib.loss.cem_loss.CEMLoss.pn_x0_generator">pn_x0_generator</a></code></li>
 <li><code><a title="maxi.lib.loss.cem_loss.CEMLoss.pp_x0_generator" href="#maxi.lib.loss.cem_loss.CEMLoss.pp_x0_generator">pp_x0_generator</a></code></li>

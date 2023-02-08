@@ -171,7 +171,9 @@ def tf_extract_nontarget_proba(P: tf.Tensor, t: int) -&gt; tf.Tensor:
     return tf.squeeze(tf.math.top_k(P_wo_target, 1)[0], axis=1)
 
 
-def torch_extract_prob(P: Tuple[torch.Tensor, np.ndarray], t: int, non_target: bool) -&gt; float:
+def torch_extract_prob(
+    P: Tuple[torch.Tensor, np.ndarray], t: int, non_target: bool
+) -&gt; float:
     &#34;&#34;&#34;PyTorch method to extract the targets predicted value or the next highest value
 
     Args:
@@ -246,7 +248,11 @@ def torch_extract_nontarget_proba(P: torch.Tensor, t: int) -&gt; torch.Tensor:
     prob_vector = torch.zeros(len(P), dtype=torch.float32)
     for i in range(len(P)):
         prob_vector[i] = torch_extract_nontarget_proba(P[i], t)
-    return prob_vector</code></pre>
+    return prob_vector
+
+
+def generate_from_gaussian(data: np.ndarray) -&gt; np.ndarray:
+    return np.random.normal(loc=0.0, scale=1, size=data.shape)</code></pre>
 </details>
 </section>
 <section>
@@ -313,6 +319,19 @@ def torch_extract_nontarget_proba(P: torch.Tensor, t: int) -&gt; torch.Tensor:
         return P[:, t]
     else:
         raise ValueError(&#34;Got logits matrix of dimension larger than 2&#34;)</code></pre>
+</details>
+</dd>
+<dt id="maxi.utils.loss_utils.generate_from_gaussian"><code class="name flex">
+<span>def <span class="ident">generate_from_gaussian</span></span>(<span>data: numpy.ndarray) ‑> numpy.ndarray</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def generate_from_gaussian(data: np.ndarray) -&gt; np.ndarray:
+    return np.random.normal(loc=0.0, scale=1, size=data.shape)</code></pre>
 </details>
 </dd>
 <dt id="maxi.utils.loss_utils.np_extract_nontarget_proba"><code class="name flex">
@@ -607,7 +626,9 @@ in [num classes] or [bs, num classes]</dd>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def torch_extract_prob(P: Tuple[torch.Tensor, np.ndarray], t: int, non_target: bool) -&gt; float:
+<pre><code class="python">def torch_extract_prob(
+    P: Tuple[torch.Tensor, np.ndarray], t: int, non_target: bool
+) -&gt; float:
     &#34;&#34;&#34;PyTorch method to extract the targets predicted value or the next highest value
 
     Args:
@@ -703,6 +724,7 @@ in [num classes] or [bs, num classes]</dd>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
 <li><code><a title="maxi.utils.loss_utils.extract_prob" href="#maxi.utils.loss_utils.extract_prob">extract_prob</a></code></li>
+<li><code><a title="maxi.utils.loss_utils.generate_from_gaussian" href="#maxi.utils.loss_utils.generate_from_gaussian">generate_from_gaussian</a></code></li>
 <li><code><a title="maxi.utils.loss_utils.np_extract_nontarget_proba" href="#maxi.utils.loss_utils.np_extract_nontarget_proba">np_extract_nontarget_proba</a></code></li>
 <li><code><a title="maxi.utils.loss_utils.np_extract_target_proba" href="#maxi.utils.loss_utils.np_extract_target_proba">np_extract_target_proba</a></code></li>
 <li><code><a title="maxi.utils.loss_utils.tf_extract_nontarget_proba" href="#maxi.utils.loss_utils.tf_extract_nontarget_proba">tf_extract_nontarget_proba</a></code></li>

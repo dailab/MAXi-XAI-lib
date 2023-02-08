@@ -34,10 +34,12 @@ __all__ = [&#34;BaseOptimizer&#34;]
 from abc import ABC, abstractmethod
 
 import numpy as np
+import numpy.linalg as lina
 from scipy.optimize import OptimizeResult
 
 from ..gradient.base_gradient import BaseGradient
 from ...loss.base_explanation_model import BaseExplanationModel
+from ....utils.general import to_numpy
 
 
 class BaseOptimizer(ABC):
@@ -49,6 +51,7 @@ class BaseOptimizer(ABC):
         x0: np.ndarray,
         lower: np.ndarray,
         upper: np.ndarray,
+        algorithm,
     ) -&gt; None:
         &#34;&#34;&#34;**Abstract Class**: Base Class for Optimizers.
 
@@ -65,6 +68,8 @@ class BaseOptimizer(ABC):
              target image.
             upper (np.ndarray): Upper bound for each entry of the matrix. Has to be of the same shape as the \
                 target image.
+            algorithm: Class containing the optimization algorithm. Has to implement the update method that returns \
+                the most recent optimization result (e.g. perturbed image matrix).
         &#34;&#34;&#34;
         self.loss, self.gradient = loss, gradient
         self.org_image, self.org_shape, self.x0, self.lower, self.upper = (
@@ -74,6 +79,8 @@ class BaseOptimizer(ABC):
             lower,
             upper,
         )
+        self.alg = algorithm
+        self.call_count = 0
 
     @abstractmethod
     def step(self, *args, **kwargs) -&gt; OptimizeResult:
@@ -90,7 +97,23 @@ class BaseOptimizer(ABC):
             OptimizeResult: Represents the optimization result. Furthermore, holds additional information about \
                 optimization.
         &#34;&#34;&#34;
-        raise NotImplementedError()</code></pre>
+        y = self.alg.update() if self.call_count != 0 else self.x0
+        self.call_count = self.call_count + 1
+        loss, l1, l2 = (
+            to_numpy(self.alg.func(y)),
+            lina.norm(y.flatten(), ord=1),  # * self.l1,
+            (lina.norm(y.flatten(), ord=2) ** 2) * self.l2 / 2,
+        )
+        return OptimizeResult(
+            func=(loss + l1 + l2)[0],
+            x=y,
+            loss=loss[0],
+            l1=l1,
+            l2=l2,
+            nit=self.call_count,
+            nfev=self.call_count,
+            success=(y is not None),
+        )</code></pre>
 </details>
 </section>
 <section>
@@ -104,7 +127,7 @@ class BaseOptimizer(ABC):
 <dl>
 <dt id="maxi.lib.computation_components.optimizer.base_optimizer.BaseOptimizer"><code class="flex name class">
 <span>class <span class="ident">BaseOptimizer</span></span>
-<span>(</span><span>loss: <a title="maxi.lib.loss.base_explanation_model.BaseExplanationModel" href="../../loss/base_explanation_model.html#maxi.lib.loss.base_explanation_model.BaseExplanationModel">BaseExplanationModel</a>, gradient: <a title="maxi.lib.computation_components.gradient.base_gradient.BaseGradient" href="../gradient/base_gradient.html#maxi.lib.computation_components.gradient.base_gradient.BaseGradient">BaseGradient</a>, org_img: numpy.ndarray, x0: numpy.ndarray, lower: numpy.ndarray, upper: numpy.ndarray)</span>
+<span>(</span><span>loss: <a title="maxi.lib.loss.base_explanation_model.BaseExplanationModel" href="../../loss/base_explanation_model.html#maxi.lib.loss.base_explanation_model.BaseExplanationModel">BaseExplanationModel</a>, gradient: <a title="maxi.lib.computation_components.gradient.base_gradient.BaseGradient" href="../gradient/base_gradient.html#maxi.lib.computation_components.gradient.base_gradient.BaseGradient">BaseGradient</a>, org_img: numpy.ndarray, x0: numpy.ndarray, lower: numpy.ndarray, upper: numpy.ndarray, algorithm)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Helper class that provides a standard way to create an ABC using
@@ -129,6 +152,9 @@ target image.</dd>
 <dt><strong><code>upper</code></strong> :&ensp;<code>np.ndarray</code></dt>
 <dd>Upper bound for each entry of the matrix. Has to be of the same shape as the
 target image.</dd>
+<dt><strong><code>algorithm</code></strong></dt>
+<dd>Class containing the optimization algorithm. Has to implement the update method that returns
+the most recent optimization result (e.g. perturbed image matrix).</dd>
 </dl></div>
 <details class="source">
 <summary>
@@ -143,6 +169,7 @@ target image.</dd>
         x0: np.ndarray,
         lower: np.ndarray,
         upper: np.ndarray,
+        algorithm,
     ) -&gt; None:
         &#34;&#34;&#34;**Abstract Class**: Base Class for Optimizers.
 
@@ -159,6 +186,8 @@ target image.</dd>
              target image.
             upper (np.ndarray): Upper bound for each entry of the matrix. Has to be of the same shape as the \
                 target image.
+            algorithm: Class containing the optimization algorithm. Has to implement the update method that returns \
+                the most recent optimization result (e.g. perturbed image matrix).
         &#34;&#34;&#34;
         self.loss, self.gradient = loss, gradient
         self.org_image, self.org_shape, self.x0, self.lower, self.upper = (
@@ -168,6 +197,8 @@ target image.</dd>
             lower,
             upper,
         )
+        self.alg = algorithm
+        self.call_count = 0
 
     @abstractmethod
     def step(self, *args, **kwargs) -&gt; OptimizeResult:
@@ -184,7 +215,23 @@ target image.</dd>
             OptimizeResult: Represents the optimization result. Furthermore, holds additional information about \
                 optimization.
         &#34;&#34;&#34;
-        raise NotImplementedError()</code></pre>
+        y = self.alg.update() if self.call_count != 0 else self.x0
+        self.call_count = self.call_count + 1
+        loss, l1, l2 = (
+            to_numpy(self.alg.func(y)),
+            lina.norm(y.flatten(), ord=1),  # * self.l1,
+            (lina.norm(y.flatten(), ord=2) ** 2) * self.l2 / 2,
+        )
+        return OptimizeResult(
+            func=(loss + l1 + l2)[0],
+            x=y,
+            loss=loss[0],
+            l1=l1,
+            l2=l2,
+            nit=self.call_count,
+            nfev=self.call_count,
+            success=(y is not None),
+        )</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
@@ -193,6 +240,7 @@ target image.</dd>
 <h3>Subclasses</h3>
 <ul class="hlist">
 <li><a title="maxi.lib.computation_components.optimizer.ada_exp_grad.AdaExpGradOptimizer" href="ada_exp_grad.html#maxi.lib.computation_components.optimizer.ada_exp_grad.AdaExpGradOptimizer">AdaExpGradOptimizer</a></li>
+<li>maxi.lib.computation_components.optimizer.ada_exp_grad_p.AdaExpGradPOptimizer</li>
 <li><a title="maxi.lib.computation_components.optimizer.ao_exp_grad.AoExpGradOptimizer" href="ao_exp_grad.html#maxi.lib.computation_components.optimizer.ao_exp_grad.AoExpGradOptimizer">AoExpGradOptimizer</a></li>
 <li><a title="maxi.lib.computation_components.optimizer.spectral_ao_exp_grad.SpectralAoExpGradOptimizer" href="spectral_ao_exp_grad.html#maxi.lib.computation_components.optimizer.spectral_ao_exp_grad.SpectralAoExpGradOptimizer">SpectralAoExpGradOptimizer</a></li>
 </ul>
@@ -236,7 +284,23 @@ def step(self, *args, **kwargs) -&gt; OptimizeResult:
         OptimizeResult: Represents the optimization result. Furthermore, holds additional information about \
             optimization.
     &#34;&#34;&#34;
-    raise NotImplementedError()</code></pre>
+    y = self.alg.update() if self.call_count != 0 else self.x0
+    self.call_count = self.call_count + 1
+    loss, l1, l2 = (
+        to_numpy(self.alg.func(y)),
+        lina.norm(y.flatten(), ord=1),  # * self.l1,
+        (lina.norm(y.flatten(), ord=2) ** 2) * self.l2 / 2,
+    )
+    return OptimizeResult(
+        func=(loss + l1 + l2)[0],
+        x=y,
+        loss=loss[0],
+        l1=l1,
+        l2=l2,
+        nit=self.call_count,
+        nfev=self.call_count,
+        success=(y is not None),
+    )</code></pre>
 </details>
 </dd>
 </dl>

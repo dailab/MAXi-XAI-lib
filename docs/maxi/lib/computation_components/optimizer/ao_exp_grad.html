@@ -90,7 +90,7 @@ class AOExpGrad(object):
 
     def md(self, g):
         beta = 1.0 / self.d
-        alpha = np.sqrt(self.lam) / np.sqrt(np.log(self.d)) * self.eta
+        alpha = np.sqrt(self.lam) / np.sqrt(np.log(self.d+1)) * self.eta
         if alpha == 0.0:
             alpha += 1e-6
         z = (np.log(np.abs(self.x) / beta + 1.0)) * np.sign(self.x) - (
@@ -98,11 +98,11 @@ class AOExpGrad(object):
         ) / alpha
         x_sgn = np.sign(z)
         if self.l2 == 0.0:
-            x_val = beta * np.exp(np.maximum(np.abs(z) - self.l1 * self.t / alpha, 0.0)) - beta
+            x_val = beta * np.exp(np.maximum(np.abs(z) - self.l1 * (self.t+1) / alpha, 0.0)) - beta
         else:
             a = beta
-            b = self.l2 * self.t / alpha
-            c = np.minimum(self.l1 * self.t / alpha - np.abs(z), 0.0)
+            b = self.l2 * (self.t + 1) / alpha
+            c = np.minimum(self.l1 * (self.t + 1) / alpha - np.abs(z), 0.0)
             abc = -c + np.log(a * b) + a * b
             x_val = (
                 np.where(
@@ -148,29 +148,20 @@ class AoExpGradOptimizer(BaseOptimizer):
             l2 (float, optional): L2 regularization coefficient. Defaults to 0.5.
             eta (float, optional): Coefficient to calculate $$\alpha$$. Defaults to 1.0.
         &#34;&#34;&#34;
-        super().__init__(
-            loss,
-            gradient,
-            org_img,
-            x0,
-            lower,
-            upper,
-        )
-
         self.eta, self.l1, self.l2 = eta, l1, l2
 
-        self.alg = AOExpGrad(
-            func=self.loss,
-            func_p=self.gradient,
-            x0=self.x0,
-            lower=self.lower,
-            upper=self.upper,
+        alg = AOExpGrad(
+            func=loss,
+            func_p=gradient,
+            x0=x0,
+            lower=lower,
+            upper=upper,
             eta=self.eta,
             l1=self.l1,
             l2=self.l2,
         )
 
-        self.call_count = 0
+        super().__init__(loss, gradient, org_img, x0, lower, upper, alg)
 
     def step(self, *args, **kwargs) -&gt; OptimizeResult:
         &#34;&#34;&#34;Performs one optimization step.
@@ -179,16 +170,7 @@ class AoExpGradOptimizer(BaseOptimizer):
             OptimizeResult: Represents the optimization result. Furthermore, holds additional information about \
                 optimization.
         &#34;&#34;&#34;
-        y = self.alg.update() if self.call_count != 0 else self.x0
-        self.call_count = self.call_count + 1
-        y_norm = lina.norm(y.flatten(), ord=1) * self.l1 + (lina.norm(y.flatten(), ord=2) ** 2) * self.l2 / 2
-        return OptimizeResult(
-            func=to_numpy(self.alg.func(y)) + y_norm,
-            x=y,
-            nit=self.call_count,
-            nfev=self.call_count,
-            success=(y is not None),
-        )</code></pre>
+        return super().step(*args, **kwargs)</code></pre>
 </details>
 </section>
 <section>
@@ -261,29 +243,20 @@ target image.</dd>
             l2 (float, optional): L2 regularization coefficient. Defaults to 0.5.
             eta (float, optional): Coefficient to calculate $$\alpha$$. Defaults to 1.0.
         &#34;&#34;&#34;
-        super().__init__(
-            loss,
-            gradient,
-            org_img,
-            x0,
-            lower,
-            upper,
-        )
-
         self.eta, self.l1, self.l2 = eta, l1, l2
 
-        self.alg = AOExpGrad(
-            func=self.loss,
-            func_p=self.gradient,
-            x0=self.x0,
-            lower=self.lower,
-            upper=self.upper,
+        alg = AOExpGrad(
+            func=loss,
+            func_p=gradient,
+            x0=x0,
+            lower=lower,
+            upper=upper,
             eta=self.eta,
             l1=self.l1,
             l2=self.l2,
         )
 
-        self.call_count = 0
+        super().__init__(loss, gradient, org_img, x0, lower, upper, alg)
 
     def step(self, *args, **kwargs) -&gt; OptimizeResult:
         &#34;&#34;&#34;Performs one optimization step.
@@ -292,16 +265,7 @@ target image.</dd>
             OptimizeResult: Represents the optimization result. Furthermore, holds additional information about \
                 optimization.
         &#34;&#34;&#34;
-        y = self.alg.update() if self.call_count != 0 else self.x0
-        self.call_count = self.call_count + 1
-        y_norm = lina.norm(y.flatten(), ord=1) * self.l1 + (lina.norm(y.flatten(), ord=2) ** 2) * self.l2 / 2
-        return OptimizeResult(
-            func=to_numpy(self.alg.func(y)) + y_norm,
-            x=y,
-            nit=self.call_count,
-            nfev=self.call_count,
-            success=(y is not None),
-        )</code></pre>
+        return super().step(*args, **kwargs)</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
@@ -332,16 +296,7 @@ optimization.</dd>
         OptimizeResult: Represents the optimization result. Furthermore, holds additional information about \
             optimization.
     &#34;&#34;&#34;
-    y = self.alg.update() if self.call_count != 0 else self.x0
-    self.call_count = self.call_count + 1
-    y_norm = lina.norm(y.flatten(), ord=1) * self.l1 + (lina.norm(y.flatten(), ord=2) ** 2) * self.l2 / 2
-    return OptimizeResult(
-        func=to_numpy(self.alg.func(y)) + y_norm,
-        x=y,
-        nit=self.call_count,
-        nfev=self.call_count,
-        success=(y is not None),
-    )</code></pre>
+    return super().step(*args, **kwargs)</code></pre>
 </details>
 </dd>
 </dl>

@@ -1,4 +1,4 @@
-"""Base Explanation Model"""
+"""Base Segmentation Handler"""
 from abc import ABC
 from typing import List
 

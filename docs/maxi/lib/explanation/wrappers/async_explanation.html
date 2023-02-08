@@ -101,12 +101,11 @@ class AsyncExplanationWrapper:
                 try:
                     inference_call = inference_calls[key]
                     meta_data = _meta_data[key] if _meta_data else {}
-                except KeyError:
+                except KeyError as e:
                     raise KeyError(
-                        f&#34;Couldn&#39;t retrieve the inference method or meta data for the {i}th image in the list. &#34;
-                        &#34;Make sure that the dictionary is keyed by the string byte presentation of the array. \n&#34;
-                        &#34;[You can get it by calling: *image_matrix*.tobytes() ]&#34;
-                    )
+                        f&#34;Couldn&#39;t retrieve the inference method or meta data for the {i}th image in the list. &#34; 
+                        &#34;Make sure that the dictionary is keyed by the string byte presentation of the array. \n&#34; 
+                        &#34;[You can get it by calling: *image_matrix*.tobytes() ]&#34;) from e
 
                 future_to_bytes[
                     executor.submit(
@@ -222,12 +221,11 @@ upper bound (optimizer keys <em>lower</em> and <em>upper</em>),</p></div>
                 try:
                     inference_call = inference_calls[key]
                     meta_data = _meta_data[key] if _meta_data else {}
-                except KeyError:
+                except KeyError as e:
                     raise KeyError(
-                        f&#34;Couldn&#39;t retrieve the inference method or meta data for the {i}th image in the list. &#34;
-                        &#34;Make sure that the dictionary is keyed by the string byte presentation of the array. \n&#34;
-                        &#34;[You can get it by calling: *image_matrix*.tobytes() ]&#34;
-                    )
+                        f&#34;Couldn&#39;t retrieve the inference method or meta data for the {i}th image in the list. &#34; 
+                        &#34;Make sure that the dictionary is keyed by the string byte presentation of the array. \n&#34; 
+                        &#34;[You can get it by calling: *image_matrix*.tobytes() ]&#34;) from e
 
                 future_to_bytes[
                     executor.submit(
@@ -320,12 +318,11 @@ raw results, meta data.</dd>
             try:
                 inference_call = inference_calls[key]
                 meta_data = _meta_data[key] if _meta_data else {}
-            except KeyError:
+            except KeyError as e:
                 raise KeyError(
-                    f&#34;Couldn&#39;t retrieve the inference method or meta data for the {i}th image in the list. &#34;
-                    &#34;Make sure that the dictionary is keyed by the string byte presentation of the array. \n&#34;
-                    &#34;[You can get it by calling: *image_matrix*.tobytes() ]&#34;
-                )
+                    f&#34;Couldn&#39;t retrieve the inference method or meta data for the {i}th image in the list. &#34; 
+                    &#34;Make sure that the dictionary is keyed by the string byte presentation of the array. \n&#34; 
+                    &#34;[You can get it by calling: *image_matrix*.tobytes() ]&#34;) from e
 
             future_to_bytes[
                 executor.submit(

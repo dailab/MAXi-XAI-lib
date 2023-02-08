@@ -52,7 +52,8 @@ class BaseExplanationModel(ABC):
 
         Description:
             The explanation models have to be implemented as a loss function. This class provides \
-            the essential interface for loss functions.
+            the essential interface for loss functions. For the loss functions compatible gradient \
+            methods need to be specified in the ```compatible_grad_methods``` attribute.
 
         Args:
             org_img (np.ndarray): Original target image in [width, height, channels].
@@ -61,8 +62,6 @@ class BaseExplanationModel(ABC):
             lower (np.ndarray): Lower bound for the object of optimization. Has to be of same shape as org_img.
             upper (np.ndarray): Lower bound for the object of optimization. Has to be of same shape as org_img.
         &#34;&#34;&#34;
-        assert org_img.shape == lower.shape and org_img.shape == upper.shape
-
         self.org_img, self.inference = org_img, inference
         self.inference = inference
         self._x0_generator, self._lower, self._upper = x0_generator, lower, upper
@@ -102,7 +101,8 @@ inheritance.</p>
 <p><strong>Abstract Class</strong>: Base Class for Explanation Methods.</p>
 <h2 id="description">Description</h2>
 <p>The explanation models have to be implemented as a loss function. This class provides
-the essential interface for loss functions.</p>
+the essential interface for loss functions. For the loss functions compatible gradient
+methods need to be specified in the <code>compatible_grad_methods</code> attribute.</p>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>org_img</code></strong> :&ensp;<code>np.ndarray</code></dt>
@@ -137,7 +137,8 @@ the essential interface for loss functions.</p>
 
         Description:
             The explanation models have to be implemented as a loss function. This class provides \
-            the essential interface for loss functions.
+            the essential interface for loss functions. For the loss functions compatible gradient \
+            methods need to be specified in the ```compatible_grad_methods``` attribute.
 
         Args:
             org_img (np.ndarray): Original target image in [width, height, channels].
@@ -146,8 +147,6 @@ the essential interface for loss functions.</p>
             lower (np.ndarray): Lower bound for the object of optimization. Has to be of same shape as org_img.
             upper (np.ndarray): Lower bound for the object of optimization. Has to be of same shape as org_img.
         &#34;&#34;&#34;
-        assert org_img.shape == lower.shape and org_img.shape == upper.shape
-
         self.org_img, self.inference = org_img, inference
         self.inference = inference
         self._x0_generator, self._lower, self._upper = x0_generator, lower, upper
@@ -174,6 +173,7 @@ the essential interface for loss functions.</p>
 <h3>Subclasses</h3>
 <ul class="hlist">
 <li><a title="maxi.lib.loss.cem_loss.CEMLoss" href="cem_loss.html#maxi.lib.loss.cem_loss.CEMLoss">CEMLoss</a></li>
+<li><a title="maxi.lib.loss.lime_loss.LimeLoss" href="lime_loss.html#maxi.lib.loss.lime_loss.LimeLoss">LimeLoss</a></li>
 </ul>
 <h3>Class variables</h3>
 <dl>

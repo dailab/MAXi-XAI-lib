@@ -150,7 +150,7 @@ constructs an array of binary classification format.
 In order to extract the confidence, the user needs to provide a suitable <code>confidence calculator</code>
 method.</p>
 <p>Output format:
-[-(confidence - 0.5) * 2, (confidence - 0.5) * 2]</p>
+[bs, [-(confidence - 0.5) * 2, (confidence - 0.5) * 2]]</p>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>preprocess</code></strong> :&ensp;<code>Processor</code>, optional</dt>
@@ -180,7 +180,7 @@ Defaults to calculate_confidence.</dd>
             method.
 
         Output format:
-            [-(confidence - 0.5) * 2, (confidence - 0.5) * 2]
+            [bs, [-(confidence - 0.5) * 2, (confidence - 0.5) * 2]]
 
         Args:
             preprocess (Processor, optional): Preprocessing procedure before quantizing. 
@@ -196,15 +196,21 @@ Defaults to calculate_confidence.</dd>
         &#34;&#34;&#34;Performs the quantization
 
         Args:
-            prediction (np.ndarray): Any type of inference result (e.g. a segmentation mask).
+            prediction (np.ndarray): Any type of inference result (e.g. a segmentation mask) in [bs, w, h, c].
 
         Returns:
-            np.ndarray: Prediction of binary classification format ([-(confidence - 0.5) * 2, (confidence - 0.5) * 2])
+            np.ndarray: Prediction of binary classification format ([bs, [-(confidence - 0.5) * 2, (confidence - 0.5) * 2]])
         &#34;&#34;&#34;
-        preprocessed_pred = super().__call__(prediction)
-        # calculate confidence
-        score = (self.confidence_calculator(preprocessed_pred) - 0.5) * 2
-        return np.array([-score, score])</code></pre>
+        preprocessed_pred = super().__call__(to_numpy(prediction))
+
+        binary_clsfctn = np.zeros((len(preprocessed_pred), 2))
+        array = np.array([-1.0, 1.0])
+
+        for i, pred in enumerate(preprocessed_pred):
+            # calculate confidence
+            binary_clsfctn[i] = array * (self.confidence_calculator(pred) - 0.5) * 2
+
+        return binary_clsfctn</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
