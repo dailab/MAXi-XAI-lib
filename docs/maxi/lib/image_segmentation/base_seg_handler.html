@@ -28,7 +28,7 @@
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">&#34;&#34;&#34;Base Segmentation Handler&#34;&#34;&#34;
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import List
 
 import numpy as np
@@ -50,13 +50,12 @@ class BaseSegmentationHandler(ABC):
             the weight vector of the label images - reducing the complexity of the explanation.
 
         Args:
-            image (np.ndarray): Array containing the image of shape [W, H, C]
-            sp_algorithm (str): CV2 superpixel algorithm to use: SLIC, SLICO, MSLIC.
-            sp_kwargs (dict): Superpixel algorithm kwargs.
+            image (np.ndarray): Array containing the image of shape [W, H, C] or [C, W, H].
         &#34;&#34;&#34;
         self.image = image
         self.adj_image = self.adjust_image_shape(image)
         self._label_images = self._build_label_images(self.adj_image)
+        print(f&#34;[INFO] {self.num_segments} unique segments found!&#34;)
 
     @property
     def label_images(self) -&gt; List[np.ndarray]:
@@ -105,6 +104,10 @@ class BaseSegmentationHandler(ABC):
     def get_readjusted_labelimages(self) -&gt; np.ndarray:
         &#34;&#34;&#34;Readjusts the label images to the original image shape if necessary.
 
+        Description:
+            Reshapes the label images to the original image shape if they are still
+            in the segmentation algorithm&#39;s compatible one.
+
         Example:
             Original image has shape [1, 3, 256, 256]
             Label images have shape [256, 256, 3]
@@ -116,6 +119,7 @@ class BaseSegmentationHandler(ABC):
         &#34;&#34;&#34;
         return [img.reshape(self.image.shape[1:]) for img in self.label_images]
 
+    @abstractmethod
     def _build_label_images(self, img: np.ndarray, *args, **kwargs) -&gt; List[np.ndarray]:
         &#34;&#34;&#34;Builds the label images with the implemented algorithm.
 
@@ -136,18 +140,17 @@ class BaseSegmentationHandler(ABC):
         &#34;&#34;&#34;Generates an image from a weight vector.
 
         Args:
-            weight_vec (np.ndarray): Weight vector for the superpixels of shape
+            weight_vec (np.ndarray): Encoded Image. Weight vector for the superpixels of shape
                 [number_of_superpixels,].
 
         Returns:
-            np.ndarray: Generated image of 3d shape.
+            np.ndarray: Decoded Image. Generated image of 3d shape.
         &#34;&#34;&#34;
-        assert weight_vec.shape in [
-            (self.num_segments,),
-            (1, self.num_segments),
-        ], &#34;Weight vector shape mismatch.&#34;
-        &#34;Needs to have the same number of entries as the number of superpixels. \n&#34;
-        f&#34;Got: {weight_vec.shape}, Expected: ({self.num_segments},)&#34;
+        assert weight_vec.shape in [(self.num_segments,), (1, self.num_segments),], (
+            &#34;Weight vector shape mismatch.&#34;
+            &#34;Needs to have the same number of entries as the number of superpixels. \n&#34;
+            f&#34;Got: {weight_vec.shape}, Expected: ({self.num_segments},)&#34;
+        )
 
         if not hasattr(self, &#34;_readjusted_label_images&#34;):
             self._readjusted_label_images = self.get_readjusted_labelimages()
@@ -196,11 +199,7 @@ the weight vector of the label images - reducing the complexity of the explanati
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>image</code></strong> :&ensp;<code>np.ndarray</code></dt>
-<dd>Array containing the image of shape [W, H, C]</dd>
-<dt><strong><code>sp_algorithm</code></strong> :&ensp;<code>str</code></dt>
-<dd>CV2 superpixel algorithm to use: SLIC, SLICO, MSLIC.</dd>
-<dt><strong><code>sp_kwargs</code></strong> :&ensp;<code>dict</code></dt>
-<dd>Superpixel algorithm kwargs.</dd>
+<dd>Array containing the image of shape [W, H, C] or [C, W, H].</dd>
 </dl></div>
 <details class="source">
 <summary>
@@ -222,13 +221,12 @@ the weight vector of the label images - reducing the complexity of the explanati
             the weight vector of the label images - reducing the complexity of the explanation.
 
         Args:
-            image (np.ndarray): Array containing the image of shape [W, H, C]
-            sp_algorithm (str): CV2 superpixel algorithm to use: SLIC, SLICO, MSLIC.
-            sp_kwargs (dict): Superpixel algorithm kwargs.
+            image (np.ndarray): Array containing the image of shape [W, H, C] or [C, W, H].
         &#34;&#34;&#34;
         self.image = image
         self.adj_image = self.adjust_image_shape(image)
         self._label_images = self._build_label_images(self.adj_image)
+        print(f&#34;[INFO] {self.num_segments} unique segments found!&#34;)
 
     @property
     def label_images(self) -&gt; List[np.ndarray]:
@@ -277,6 +275,10 @@ the weight vector of the label images - reducing the complexity of the explanati
     def get_readjusted_labelimages(self) -&gt; np.ndarray:
         &#34;&#34;&#34;Readjusts the label images to the original image shape if necessary.
 
+        Description:
+            Reshapes the label images to the original image shape if they are still
+            in the segmentation algorithm&#39;s compatible one.
+
         Example:
             Original image has shape [1, 3, 256, 256]
             Label images have shape [256, 256, 3]
@@ -288,6 +290,7 @@ the weight vector of the label images - reducing the complexity of the explanati
         &#34;&#34;&#34;
         return [img.reshape(self.image.shape[1:]) for img in self.label_images]
 
+    @abstractmethod
     def _build_label_images(self, img: np.ndarray, *args, **kwargs) -&gt; List[np.ndarray]:
         &#34;&#34;&#34;Builds the label images with the implemented algorithm.
 
@@ -308,18 +311,17 @@ the weight vector of the label images - reducing the complexity of the explanati
         &#34;&#34;&#34;Generates an image from a weight vector.
 
         Args:
-            weight_vec (np.ndarray): Weight vector for the superpixels of shape
+            weight_vec (np.ndarray): Encoded Image. Weight vector for the superpixels of shape
                 [number_of_superpixels,].
 
         Returns:
-            np.ndarray: Generated image of 3d shape.
+            np.ndarray: Decoded Image. Generated image of 3d shape.
         &#34;&#34;&#34;
-        assert weight_vec.shape in [
-            (self.num_segments,),
-            (1, self.num_segments),
-        ], &#34;Weight vector shape mismatch.&#34;
-        &#34;Needs to have the same number of entries as the number of superpixels. \n&#34;
-        f&#34;Got: {weight_vec.shape}, Expected: ({self.num_segments},)&#34;
+        assert weight_vec.shape in [(self.num_segments,), (1, self.num_segments),], (
+            &#34;Weight vector shape mismatch.&#34;
+            &#34;Needs to have the same number of entries as the number of superpixels. \n&#34;
+            f&#34;Got: {weight_vec.shape}, Expected: ({self.num_segments},)&#34;
+        )
 
         if not hasattr(self, &#34;_readjusted_label_images&#34;):
             self._readjusted_label_images = self.get_readjusted_labelimages()
@@ -447,13 +449,13 @@ def zeros_weight_vector(self) -&gt; np.ndarray:
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>weight_vec</code></strong> :&ensp;<code>np.ndarray</code></dt>
-<dd>Weight vector for the superpixels of shape
+<dd>Encoded Image. Weight vector for the superpixels of shape
 [number_of_superpixels,].</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
 <dt><code>np.ndarray</code></dt>
-<dd>Generated image of 3d shape.</dd>
+<dd>Decoded Image. Generated image of 3d shape.</dd>
 </dl></div>
 <details class="source">
 <summary>
@@ -463,18 +465,17 @@ def zeros_weight_vector(self) -&gt; np.ndarray:
     &#34;&#34;&#34;Generates an image from a weight vector.
 
     Args:
-        weight_vec (np.ndarray): Weight vector for the superpixels of shape
+        weight_vec (np.ndarray): Encoded Image. Weight vector for the superpixels of shape
             [number_of_superpixels,].
 
     Returns:
-        np.ndarray: Generated image of 3d shape.
+        np.ndarray: Decoded Image. Generated image of 3d shape.
     &#34;&#34;&#34;
-    assert weight_vec.shape in [
-        (self.num_segments,),
-        (1, self.num_segments),
-    ], &#34;Weight vector shape mismatch.&#34;
-    &#34;Needs to have the same number of entries as the number of superpixels. \n&#34;
-    f&#34;Got: {weight_vec.shape}, Expected: ({self.num_segments},)&#34;
+    assert weight_vec.shape in [(self.num_segments,), (1, self.num_segments),], (
+        &#34;Weight vector shape mismatch.&#34;
+        &#34;Needs to have the same number of entries as the number of superpixels. \n&#34;
+        f&#34;Got: {weight_vec.shape}, Expected: ({self.num_segments},)&#34;
+    )
 
     if not hasattr(self, &#34;_readjusted_label_images&#34;):
         self._readjusted_label_images = self.get_readjusted_labelimages()
@@ -510,6 +511,9 @@ def zeros_weight_vector(self) -&gt; np.ndarray:
 </code></dt>
 <dd>
 <div class="desc"><p>Readjusts the label images to the original image shape if necessary.</p>
+<h2 id="description">Description</h2>
+<p>Reshapes the label images to the original image shape if they are still
+in the segmentation algorithm's compatible one.</p>
 <h2 id="example">Example</h2>
 <p>Original image has shape [1, 3, 256, 256]
 Label images have shape [256, 256, 3]</p>
@@ -526,6 +530,10 @@ Label images have shape [256, 256, 3]</p>
 </summary>
 <pre><code class="python">def get_readjusted_labelimages(self) -&gt; np.ndarray:
     &#34;&#34;&#34;Readjusts the label images to the original image shape if necessary.
+
+    Description:
+        Reshapes the label images to the original image shape if they are still
+        in the segmentation algorithm&#39;s compatible one.
 
     Example:
         Original image has shape [1, 3, 256, 256]
