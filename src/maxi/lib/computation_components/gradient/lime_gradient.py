@@ -6,7 +6,7 @@ import numpy as np
 
 from .base_gradient import BaseGradient
 from ...loss.base_explanation_model import BaseExplanationModel
-from ....utils.superpixel_handler import SuperpixelHandler
+from ...image_segmentation.base_seg_handler import BaseSegmentationHandler
 
 
 class LimeGradient(BaseGradient):
@@ -16,17 +16,12 @@ class LimeGradient(BaseGradient):
         assert (
             type(loss) is LimeLoss or type(loss) is SuperpixelLimeLoss
         ), "Invalid loss class given for LimeGradient!"
+
         super().__init__(loss)
 
-        # assert hasattr(
-        #     self.loss, "superpixel_handler"
-        # ), "SuperpixelLoss must have a superpixel handler!"
         self._superpixel_mode = hasattr(self.loss, "superpixel_handler")
 
     def __call__(self, data: np.ndarray, *args, **kwds) -> np.ndarray:
-        # if self._superpixel_mode:
-        #     data = self.loss.superpixel_handler.generate_img_from_weight_vector(data)
-
         n, pi_Z, Z, flatten_Z, pred = (
             self.loss.n_samples,
             self.loss.Pi_Z,
