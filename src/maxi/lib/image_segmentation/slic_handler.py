@@ -40,22 +40,6 @@ class SlicHandler(BaseSegmentationHandler):
         super().__init__(image)
 
     @staticmethod
-    def adjust_image_shape(image: np.ndarray) -> np.ndarray:
-        if image.ndim not in [2, 3, 4]:
-            raise ValueError("Image has to be 2D, 3D or 4D.")
-
-        # Image has to be channels-last and 3D
-        if image.ndim == 2:
-            image = np.expand_dims(image, axis=-1)
-
-        if image.ndim == 4:
-            image = image.squeeze(axis=0)
-
-        if image.shape[0] in [1, 3]:
-            image = image.transpose(1, 2, 0)
-        return image
-
-    @staticmethod
     def _retrieve_sp_algorithm(
         alg_name: str,
     ) -> "Union[cv2.ximgproc.SLIC, cv2.ximgproc.SLICO, cv2.ximgproc.MSLIC]":

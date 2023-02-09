@@ -42,23 +42,6 @@ class WatershedHandler(BaseSegmentationHandler):
         )
         super().__init__(image)
 
-    @staticmethod
-    def adjust_image_shape(image: np.ndarray) -> np.ndarray:
-        if image.ndim not in [2, 3, 4]:
-            raise ValueError("Image has to be 2D, 3D or 4D.")
-
-        # Image has to be channels-first and 3D
-        if image.ndim == 2:
-            image = np.expand_dims(image, axis=-1)
-
-        if image.ndim == 4:
-            image = image.squeeze(axis=0)
-
-        # channels first
-        if image.shape[2] in [1, 3]:
-            image = image.transpose(2, 0, 1)
-        return image
-
     def _build_label_images(self, img: np.ndarray) -> List[np.ndarray]:
         """Builds the label images by applying the watershed algorithm.
 
@@ -116,7 +99,6 @@ class WatershedHandler(BaseSegmentationHandler):
         # using 8-connectivity, then appy the Watershed algorithm
         markers = ndimage.label(localMax, structure=np.ones((3, 3)))[0]
         labels = watershed(-D, markers, mask=thresh)
-        print(f"[INFO] {len(np.unique(labels)) - 1} unique segments found")
 
         self._num_segments = len(np.unique(labels)) - 1
 
