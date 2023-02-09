@@ -77,8 +77,7 @@ For every entity, there exists a base class that has to be inhereted from. That 
 - Incorporates external inference model - is called for its calculations
 
 Currently implemented:
-
-- [Contrastive-Explanation-Method (PP and PN)](https://arxiv.org/abs/1802.07623)
+[Click here](https://tuananhroman.github.io/empaia_max_pydoc/lib/loss/index.html)
 
 ### Inference Package
 
