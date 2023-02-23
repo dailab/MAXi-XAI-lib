@@ -149,30 +149,21 @@ class SpectralAoExpGradOptimizer(BaseOptimizer):
             l2 (float, optional): L2 regularization coefficient. Defaults to 0.5.
             eta (float, optional): Coefficient to calculate $$\alpha$$. Defaults to 1.0. Defaults to 1.0.
         &#34;&#34;&#34;
-        super().__init__(
-            loss,
-            gradient,
-            org_img,
-            x0,
-            lower,
-            upper,
-        )
-
         self.eta, self.l1, self.l2 = eta, l1, l2
 
-        self.alg = SpectralAOExpGrad(
-            func=self.loss,
-            func_p=self.gradient,
-            x0=self.x0,
-            lower=self.lower,
-            upper=self.upper,
+        alg = SpectralAOExpGrad(
+            func=loss,
+            func_p=gradient,
+            x0=x0,
+            lower=lower,
+            upper=upper,
             eta=self.eta,
             l1=self.l1,
             l2=self.l2,
             channels_first=channels_first,
         )
 
-        self.call_count = 0
+        super().__init__(loss, gradient, org_img, x0, lower, upper, alg)
 
     def step(self, *args, **kwargs) -&gt; OptimizeResult:
         &#34;&#34;&#34;Performs one optimization step.
@@ -181,16 +172,7 @@ class SpectralAoExpGradOptimizer(BaseOptimizer):
             OptimizeResult: Represents the optimization result. Furthermore, holds additional information about \
                 optimization.
         &#34;&#34;&#34;
-        y = self.alg.update() if self.call_count != 0 else self.x0
-        self.call_count = self.call_count + 1
-        y_norm = lina.norm(y.flatten(), ord=1) * self.l1 + (lina.norm(y.flatten(), ord=2) ** 2) * self.l2 / 2
-        return OptimizeResult(
-            func=to_numpy(self.alg.func(y)) + y_norm,
-            x=y,
-            nit=self.call_count,
-            nfev=self.call_count,
-            success=(y is not None),
-        )</code></pre>
+        return super().step(*args, **kwargs)</code></pre>
 </details>
 </section>
 <section>
@@ -277,30 +259,21 @@ Defaults to True.</dd>
             l2 (float, optional): L2 regularization coefficient. Defaults to 0.5.
             eta (float, optional): Coefficient to calculate $$\alpha$$. Defaults to 1.0. Defaults to 1.0.
         &#34;&#34;&#34;
-        super().__init__(
-            loss,
-            gradient,
-            org_img,
-            x0,
-            lower,
-            upper,
-        )
-
         self.eta, self.l1, self.l2 = eta, l1, l2
 
-        self.alg = SpectralAOExpGrad(
-            func=self.loss,
-            func_p=self.gradient,
-            x0=self.x0,
-            lower=self.lower,
-            upper=self.upper,
+        alg = SpectralAOExpGrad(
+            func=loss,
+            func_p=gradient,
+            x0=x0,
+            lower=lower,
+            upper=upper,
             eta=self.eta,
             l1=self.l1,
             l2=self.l2,
             channels_first=channels_first,
         )
 
-        self.call_count = 0
+        super().__init__(loss, gradient, org_img, x0, lower, upper, alg)
 
     def step(self, *args, **kwargs) -&gt; OptimizeResult:
         &#34;&#34;&#34;Performs one optimization step.
@@ -309,16 +282,7 @@ Defaults to True.</dd>
             OptimizeResult: Represents the optimization result. Furthermore, holds additional information about \
                 optimization.
         &#34;&#34;&#34;
-        y = self.alg.update() if self.call_count != 0 else self.x0
-        self.call_count = self.call_count + 1
-        y_norm = lina.norm(y.flatten(), ord=1) * self.l1 + (lina.norm(y.flatten(), ord=2) ** 2) * self.l2 / 2
-        return OptimizeResult(
-            func=to_numpy(self.alg.func(y)) + y_norm,
-            x=y,
-            nit=self.call_count,
-            nfev=self.call_count,
-            success=(y is not None),
-        )</code></pre>
+        return super().step(*args, **kwargs)</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
@@ -349,16 +313,7 @@ optimization.</dd>
         OptimizeResult: Represents the optimization result. Furthermore, holds additional information about \
             optimization.
     &#34;&#34;&#34;
-    y = self.alg.update() if self.call_count != 0 else self.x0
-    self.call_count = self.call_count + 1
-    y_norm = lina.norm(y.flatten(), ord=1) * self.l1 + (lina.norm(y.flatten(), ord=2) ** 2) * self.l2 / 2
-    return OptimizeResult(
-        func=to_numpy(self.alg.func(y)) + y_norm,
-        x=y,
-        nit=self.call_count,
-        nfev=self.call_count,
-        success=(y is not None),
-    )</code></pre>
+    return super().step(*args, **kwargs)</code></pre>
 </details>
 </dd>
 </dl>

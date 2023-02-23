@@ -50,7 +50,7 @@ class AdaExpGrad(object):
         self.eta = eta
         self.lam = 1.0
         self.t = 0.0
-        self.y = np.array(x0)
+        self.y = np.array(x0, dtype=np.float32)
         self.y[:] = x0
         self.l1 = l1
         self.l2 = l2
@@ -100,7 +100,7 @@ class AdaExpGradOptimizer(BaseOptimizer):
         upper: np.ndarray,
         l1: float = 0.5,
         l2: float = 0.5,
-        eta: float = 1.0,
+        eta: float = 0.5,
         *args,
         **kwargs,
     ) -> None:

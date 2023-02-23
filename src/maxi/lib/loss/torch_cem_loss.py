@@ -49,7 +49,10 @@ class Torch_CEMLoss(CEMLoss):
                 target image.
             channels_first (bool, optional): Whether the channels dimension comes before the width and height \
                 dimensions as in [bs, channels, width, height].
-            
+        
+        Configurable Parameters:
+            c, gamma, K, AE, channels_first
+        
         Note:
             The loss functions are implemented solely using derivable Torch methods. In order to use \
             Torch's automatic differentiation on this class' methods, the model must be implemented in Torch as well.
@@ -176,7 +179,7 @@ class Torch_CEMLoss(CEMLoss):
         ) - loss_utils.torch_extract_nontarget_proba(pred, self.target)
 
         if attack_value < -10:
-            return torch.log(1.0 + torch.exp(attack_value))
+            return attack_value + torch.log(1.0 / torch.exp(attack_value) + 1)
         else:
             return attack_value + torch.log(1.0 + torch.exp(-attack_value))
 
@@ -195,7 +198,7 @@ class Torch_CEMLoss(CEMLoss):
         ) - loss_utils.torch_extract_target_proba(pred, self.target)
 
         if attack_value < -10:
-            return torch.log(1.0 + torch.exp(attack_value))
+            return attack_value + torch.log(1.0 / torch.exp(attack_value) + 1)
         else:
             return attack_value + torch.log(1.0 + torch.exp(-attack_value))
 

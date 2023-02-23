@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.10.0" />
-<title>maxi.lib.explanation.wrappers API documentation</title>
-<meta name="description" content="Wrappers for the ExplanationGenerator" />
+<title>maxi.lib.explanation.wrappers.parameter_searcher API documentation</title>
+<meta name="description" content="Parameter Seacher Wrapper" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
 <link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
@@ -19,34 +19,188 @@
 <main>
 <article id="content">
 <header>
-<h1 class="title">Module <code>maxi.lib.explanation.wrappers</code></h1>
+<h1 class="title">Module <code>maxi.lib.explanation.wrappers.parameter_searcher</code></h1>
 </header>
 <section id="section-intro">
-<p>Wrappers for the ExplanationGenerator</p>
+<p>Parameter Seacher Wrapper</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">&#34;&#34;&#34;Wrappers for the ExplanationGenerator&#34;&#34;&#34;
+<pre><code class="python">&#34;&#34;&#34;Parameter Seacher Wrapper&#34;&#34;&#34;
+from copy import copy
+from collections import OrderedDict
+from typing import Union, Callable, Tuple, OrderedDict
+from scipy.optimize import OptimizeResult
 
-__all__ = [&#34;AsyncExplanationWrapper&#34;, &#34;ParameterSearchWrapper&#34;]
+import numpy as np
+import traceback
 
-from .async_explanation import AsyncExplanationWrapper
-from .parameter_searcher import ParameterSearchWrapper</code></pre>
+from ..explanation_generator import ExplanationGenerator
+from ...computation_components.optimizer.base_optimizer import BaseOptimizer
+from ...inference.inference_wrapper import InferenceWrapper
+from ....data.data_types import MetaData
+from ....utils import general
+
+
+class ParameterSearchWrapper:
+    def __init__(
+        self,
+        explanation_method: ExplanationGenerator,
+        initial_l1: float = 1.0,
+        initial_l2: float = 1.0,
+        max_iter: int = 10,
+    ):
+        &#34;&#34;&#34;_summary_
+
+        Args:
+            explanation_method (ExplanationGenerator): _description_
+            initial_l1 (float, optional): _description_. Defaults to 1.0.
+            initial_l2 (float, optional): _description_. Defaults to 1.0.
+            max_iter (int, optional): _description_. Defaults to 10.
+        &#34;&#34;&#34;
+        assert isinstance(explanation_method, ExplanationGenerator)
+        self.explanation_method = explanation_method
+        self.initial_l1, self.initial_l2 = initial_l1, initial_l2
+        self.max_iter = max_iter
+
+    def _explain_until_negative_loss(
+        self,
+        explanation_method: ExplanationGenerator,
+        image: np.ndarray,
+        inference_call: Union[Callable[[np.ndarray], np.ndarray], InferenceWrapper],
+        l1: float,
+        l2: float,
+    ) -&gt; Tuple[OrderedDict[str, np.ndarray], bool]:
+        &#34;&#34;&#34;Starts the explanation procedure. 
+        
+        Description:
+            It will iterate over ``num_iter`` times and apply the \
+            ``self.step()`` function which differs between different optimization algorithms. \
+            Essentially, ``self.step()`` has to be implemented when adding a new optimization class. \
+            The explanations are saved every ``save_freq``&#39;th iteration as savepoints in an OrderedDict.
+
+        Args:
+            optimizer (BaseOptimizer): Optimizer instance.
+
+        Returns:
+            OrderedDict[str, np.ndarray]: Holds the optimization result of every savepoint. \
+                Dictionary keys represent the iteration count when the image was saved. Corresponding value consists \
+                of the produced explanation of respective iteration.
+            bool: Whether the explanation method produced negative (attack) loss values.
+        &#34;&#34;&#34;
+        ParameterSearchWrapper._print_start_explanation_params(l1, l2)
+
+        # set new l1 and l2 parameters
+        explanation_method._optimizer_kwargs[&#34;l1&#34;] = l1
+        explanation_method._optimizer_kwargs[&#34;l2&#34;] = l2
+
+        _, _, optimizer = explanation_method._init_components(image, inference_call)
+
+        results = OrderedDict()
+
+        while explanation_method.iter_count &lt;= explanation_method._num_iter:
+            opt_result: OptimizeResult = optimizer.step()
+            explanation_method.iter_count += 1
+
+            if opt_result.loss &lt; 0:
+                results[str(explanation_method.iter_count)] = opt_result.x.copy()
+                explanation_method.logging_cb(opt_result)
+                ParameterSearchWrapper._print_found_negative_loss(l1, l2, explanation_method.iter_count)
+                return results, True
+
+            #: Every ``save_freq``&#39;th iteration, object of the optimization is saved
+            #: e.g. for CEM the perturbed image will be stored
+            if general.check_epoch(
+                explanation_method.iter_count, explanation_method.save_freq, explanation_method._num_iter
+            ):
+                results[str(explanation_method.iter_count)] = opt_result.x.copy()
+
+            #: Every ``log_freq``&#39;th iteration, the loss and l1 is logged on the terminal
+            if explanation_method.verbose and general.check_epoch(
+                explanation_method.iter_count, explanation_method.log_freq, explanation_method._num_iter
+            ):
+                explanation_method.logging_cb(opt_result)
+
+        return results, False
+
+    def run(
+        self,
+        image: np.ndarray,
+        inference_call: Union[Callable[[np.ndarray], np.ndarray], InferenceWrapper],
+    ) -&gt; Tuple[OrderedDict[str, OrderedDict[str, np.ndarray]], Union[float, None], Union[float, None]]:
+        &#34;&#34;&#34;Method for starting the explanation procedure
+
+        Args:
+            image (np.ndarray): Image to be explained in [width, height, channels].
+            inference_call (Union[Callable[[np.ndarray], np.ndarray], InferenceWrapper]): Inference method returning \
+                explanation model compatible predictions. The prediction result needs to be a 2D array.
+
+        Returns:
+            Tuple[OrderedDict[str, OrderedDict[str, np.ndarray]], Union[float, None], Union[float, None]]:
+                1. index of the tuple contains OrderedDict of savepoints keyed by the l1 and l2 value of that \
+                    particular run. The keys follow this syntax: &#34;l1_[l1 value]_l2_[l2 value]&#34;.
+                2. index of the tuple contains the l1 value that produced negative loss. It&#39;s None, if after \
+                    ```max_iter``` iterations of divion by 2 of l1 and l2 the attack loss is still positive.
+                3. index of the tuple contains the l2 value that produced negative loss. It&#39;s None, if after \
+                    ```max_iter``` iterations of divion by 2 of l1 and l2 the attack loss is still positive.
+        &#34;&#34;&#34;
+        assert type(image) is np.ndarray and type(image) is not bool, &#34;Image is of unsupported type&#34;
+        assert inference_call and type(inference_call) is not bool, &#34;Inference is of None Type&#34;
+
+        # try:
+        _i = 0
+        l1, l2 = self.initial_l1, self.initial_l2
+        found_negative = False
+        results = OrderedDict()
+
+        while not found_negative or _i &lt; self.max_iter:
+            explanation_method = copy(self.explanation_method)
+
+            result, found_negative = self._explain_until_negative_loss(
+                explanation_method, image, inference_call, l1, l2
+            )
+
+            results[f&#34;l1_{l1}_l2_{l2}&#34;] = result
+
+            if found_negative:
+                return results, l1, l2
+
+            _i += 1
+            l1, l2 = l1 / 2, l2 / 2
+
+        ParameterSearchWrapper._print_not_able_to_find_negative_loss(self.max_iter, l1, l2)
+        return results, None, None
+
+        # except Exception as exc:
+        #     print(f&#34;An exception occured: \n {exc}&#34;)
+        #     traceback.print_exc()
+        #     exit()
+
+    @staticmethod
+    def _print_start_explanation_params(l1: float, l2: float, seperator: str = &#34;#&#34;, line_length: int = 70) -&gt; None:
+        print(seperator * line_length)
+        print(f&#34;Start explanation with l1: {l1}, l2: {l2}&#34;)
+        print(seperator * line_length + &#34;\n&#34;)
+
+    @staticmethod
+    def _print_found_negative_loss(
+        l1: float, l2: float, iter_count: int, seperator: str = &#34;#&#34;, line_length: int = 70
+    ) -&gt; None:
+        print(&#34;\n&#34; + seperator * line_length)
+        print(f&#34;Found negative loss with l1: {l1}, l2: {l2} within {iter_count} optimization steps.&#34;)
+        print(seperator * line_length)
+
+    @staticmethod
+    def _print_not_able_to_find_negative_loss(
+        max_iter: int, l1: float, l2: float, seperator: str = &#34;#&#34;, line_length: int = 70
+    ) -&gt; None:
+        print(&#34;\n&#34; + seperator * line_length)
+        print(f&#34;Was not able to find negative loss within {max_iter} iterations. \n &#34; f&#34;Last l1: {l1}, last l2: {l2}&#34;)
+        print(seperator * line_length)</code></pre>
 </details>
 </section>
 <section>
-<h2 class="section-title" id="header-submodules">Sub-modules</h2>
-<dl>
-<dt><code class="name"><a title="maxi.lib.explanation.wrappers.async_explanation" href="async_explanation.html">maxi.lib.explanation.wrappers.async_explanation</a></code></dt>
-<dd>
-<div class="desc"><p>Asynchronous Explanation Wrapper</p></div>
-</dd>
-<dt><code class="name"><a title="maxi.lib.explanation.wrappers.parameter_searcher" href="parameter_searcher.html">maxi.lib.explanation.wrappers.parameter_searcher</a></code></dt>
-<dd>
-<div class="desc"><p>Parameter Seacher Wrapper</p></div>
-</dd>
-</dl>
 </section>
 <section>
 </section>
@@ -55,217 +209,7 @@ from .parameter_searcher import ParameterSearchWrapper</code></pre>
 <section>
 <h2 class="section-title" id="header-classes">Classes</h2>
 <dl>
-<dt id="maxi.lib.explanation.wrappers.AsyncExplanationWrapper"><code class="flex name class">
-<span>class <span class="ident">AsyncExplanationWrapper</span></span>
-<span>(</span><span>explanation_method: <a title="maxi.lib.explanation.explanation_generator.ExplanationGenerator" href="../explanation_generator.html#maxi.lib.explanation.explanation_generator.ExplanationGenerator">ExplanationGenerator</a>, n_workers: int = 1)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Asynchronous Explanation Wrapper</p>
-<h2 id="args">Args</h2>
-<dl>
-<dt><strong><code>explanation_method</code></strong> :&ensp;<code>ExplanationGenerator</code></dt>
-<dd>Instance of the ExplanationGenerator class.</dd>
-<dt><strong><code>n_workers</code></strong> :&ensp;<code>int</code></dt>
-<dd>Number of parallel worker threads.</dd>
-</dl>
-<h2 id="note">Note</h2>
-<p>When this class wraps the <code>ExplanationGenerator</code> and the user has specified a custom lower and
-upper bound (optimizer keys <em>lower</em> and <em>upper</em>),</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">class AsyncExplanationWrapper:
-    def __init__(
-        self,
-        explanation_method: ExplanationGenerator,
-        # save_res_cb: SaveResultCallback = None,
-        n_workers: int = 1,
-    ) -&gt; None:
-        &#34;&#34;&#34;Asynchronous Explanation Wrapper
-
-        Args:
-            explanation_method (ExplanationGenerator): Instance of the ExplanationGenerator class.
-            n_workers (int): Number of parallel worker threads.
-            
-        Note:
-            When this class wraps the ```ExplanationGenerator``` and the user has specified a custom lower and \
-            upper bound (optimizer keys _lower_ and _upper_), 
-        &#34;&#34;&#34;
-        assert isinstance(explanation_method, ExplanationGenerator)
-        self._explanation_generators = [copy(explanation_method) for _ in range(n_workers)]
-        self.n_workers = n_workers
-        # self.save_res_cb = save_res_cb
-
-    def run(
-        self,
-        original_images: List[np.ndarray],
-        inference_calls: Dict[bytes, Union[Callable[[np.ndarray], np.ndarray], InferenceWrapper]],
-        _meta_data: Dict[bytes, MetaData] = None,
-    ) -&gt; List[Tuple[OrderedDict[str, np.ndarray], MetaData]]:
-        &#34;&#34;&#34;Method to start the asynchronous explanation procedure
-
-        Args:
-            original_images (List[np.ndarray]): List containing the target images in [width, height, channels].
-            inference_calls (Dict[bytes, InferenceWrapper]): Dictionary, where keys are the image represented in bytes and \
-                the belonging value the corresponding inference method.
-            _meta_data (Dict[bytes, MetaData], optional):
-                Dictionary, where keys have to be the image as bytes and \
-                the belonging value the corresponding image meta data. Defaults to None.
-
-        Returns:
-            List[Tuple[OrderedDict[str, np.ndarray], MetaData]]: List containing the \
-                result tuple for all input images. An entry (tuple) made up of: \
-                raw results, meta data.
-        &#34;&#34;&#34;
-        assert type(original_images) is list and type(inference_calls) is dict
-
-        results_and_meta: List[
-            Tuple[
-                OrderedDict[str, np.ndarray],
-                MetaData,
-            ]
-        ] = []
-        future_to_bytes: Dict[concurrent.futures.Future, bytes] = {}
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.n_workers) as executor:
-            for i, image in enumerate(original_images):
-                key = image.tobytes()
-
-                try:
-                    inference_call = inference_calls[key]
-                    meta_data = _meta_data[key] if _meta_data else {}
-                except KeyError as e:
-                    raise KeyError(
-                        f&#34;Couldn&#39;t retrieve the inference method or meta data for the {i}th image in the list. &#34; 
-                        &#34;Make sure that the dictionary is keyed by the string byte presentation of the array. \n&#34; 
-                        &#34;[You can get it by calling: *image_matrix*.tobytes() ]&#34;) from e
-
-                future_to_bytes[
-                    executor.submit(
-                        self._explanation_generators[i].run,
-                        image,
-                        inference_call,
-                        meta_data,
-                    )
-                ] = key
-
-            for future in concurrent.futures.as_completed(future_to_bytes):
-                try:
-                    result = future.result()
-                except Exception as exc:
-                    print(f&#34;An exception occured: {exc}!&#34;)
-                else:
-                    # if self.save_res_cb:
-                    #     self.save_res_cb(
-                    #         _meta_data=result[2],
-                    #         raw_result=result[1],
-                    #         transformed_res=result[0],
-                    #     )
-                    results_and_meta.append(result)
-        return results_and_meta</code></pre>
-</details>
-<h3>Methods</h3>
-<dl>
-<dt id="maxi.lib.explanation.wrappers.AsyncExplanationWrapper.run"><code class="name flex">
-<span>def <span class="ident">run</span></span>(<span>self, original_images: List[numpy.ndarray], inference_calls: Dict[bytes, Union[Callable[[numpy.ndarray], numpy.ndarray], <a title="maxi.lib.inference.inference_wrapper.InferenceWrapper" href="../../inference/inference_wrapper.html#maxi.lib.inference.inference_wrapper.InferenceWrapper">InferenceWrapper</a>]]) ‑> List[Tuple[OrderedDict[str, numpy.ndarray], Dict[str, Any]]]</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Method to start the asynchronous explanation procedure</p>
-<h2 id="args">Args</h2>
-<dl>
-<dt><strong><code>original_images</code></strong> :&ensp;<code>List[np.ndarray]</code></dt>
-<dd>List containing the target images in [width, height, channels].</dd>
-<dt><strong><code>inference_calls</code></strong> :&ensp;<code>Dict[bytes, InferenceWrapper]</code></dt>
-<dd>Dictionary, where keys are the image represented in bytes and
-the belonging value the corresponding inference method.</dd>
-</dl>
-<p>_meta_data (Dict[bytes, MetaData], optional):
-Dictionary, where keys have to be the image as bytes and
-the belonging value the corresponding image meta data. Defaults to None.</p>
-<h2 id="returns">Returns</h2>
-<dl>
-<dt><code>List[Tuple[OrderedDict[str, np.ndarray], MetaData]]</code></dt>
-<dd>List containing the
-result tuple for all input images. An entry (tuple) made up of:
-raw results, meta data.</dd>
-</dl></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def run(
-    self,
-    original_images: List[np.ndarray],
-    inference_calls: Dict[bytes, Union[Callable[[np.ndarray], np.ndarray], InferenceWrapper]],
-    _meta_data: Dict[bytes, MetaData] = None,
-) -&gt; List[Tuple[OrderedDict[str, np.ndarray], MetaData]]:
-    &#34;&#34;&#34;Method to start the asynchronous explanation procedure
-
-    Args:
-        original_images (List[np.ndarray]): List containing the target images in [width, height, channels].
-        inference_calls (Dict[bytes, InferenceWrapper]): Dictionary, where keys are the image represented in bytes and \
-            the belonging value the corresponding inference method.
-        _meta_data (Dict[bytes, MetaData], optional):
-            Dictionary, where keys have to be the image as bytes and \
-            the belonging value the corresponding image meta data. Defaults to None.
-
-    Returns:
-        List[Tuple[OrderedDict[str, np.ndarray], MetaData]]: List containing the \
-            result tuple for all input images. An entry (tuple) made up of: \
-            raw results, meta data.
-    &#34;&#34;&#34;
-    assert type(original_images) is list and type(inference_calls) is dict
-
-    results_and_meta: List[
-        Tuple[
-            OrderedDict[str, np.ndarray],
-            MetaData,
-        ]
-    ] = []
-    future_to_bytes: Dict[concurrent.futures.Future, bytes] = {}
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=self.n_workers) as executor:
-        for i, image in enumerate(original_images):
-            key = image.tobytes()
-
-            try:
-                inference_call = inference_calls[key]
-                meta_data = _meta_data[key] if _meta_data else {}
-            except KeyError as e:
-                raise KeyError(
-                    f&#34;Couldn&#39;t retrieve the inference method or meta data for the {i}th image in the list. &#34; 
-                    &#34;Make sure that the dictionary is keyed by the string byte presentation of the array. \n&#34; 
-                    &#34;[You can get it by calling: *image_matrix*.tobytes() ]&#34;) from e
-
-            future_to_bytes[
-                executor.submit(
-                    self._explanation_generators[i].run,
-                    image,
-                    inference_call,
-                    meta_data,
-                )
-            ] = key
-
-        for future in concurrent.futures.as_completed(future_to_bytes):
-            try:
-                result = future.result()
-            except Exception as exc:
-                print(f&#34;An exception occured: {exc}!&#34;)
-            else:
-                # if self.save_res_cb:
-                #     self.save_res_cb(
-                #         _meta_data=result[2],
-                #         raw_result=result[1],
-                #         transformed_res=result[0],
-                #     )
-                results_and_meta.append(result)
-    return results_and_meta</code></pre>
-</details>
-</dd>
-</dl>
-</dd>
-<dt id="maxi.lib.explanation.wrappers.ParameterSearchWrapper"><code class="flex name class">
+<dt id="maxi.lib.explanation.wrappers.parameter_searcher.ParameterSearchWrapper"><code class="flex name class">
 <span>class <span class="ident">ParameterSearchWrapper</span></span>
 <span>(</span><span>explanation_method: <a title="maxi.lib.explanation.explanation_generator.ExplanationGenerator" href="../explanation_generator.html#maxi.lib.explanation.explanation_generator.ExplanationGenerator">ExplanationGenerator</a>, initial_l1: float = 1.0, initial_l2: float = 1.0, max_iter: int = 10)</span>
 </code></dt>
@@ -444,7 +388,7 @@ raw results, meta data.</dd>
 </details>
 <h3>Methods</h3>
 <dl>
-<dt id="maxi.lib.explanation.wrappers.ParameterSearchWrapper.run"><code class="name flex">
+<dt id="maxi.lib.explanation.wrappers.parameter_searcher.ParameterSearchWrapper.run"><code class="name flex">
 <span>def <span class="ident">run</span></span>(<span>self, image: numpy.ndarray, inference_call: Union[Callable[[numpy.ndarray], numpy.ndarray], <a title="maxi.lib.inference.inference_wrapper.InferenceWrapper" href="../../inference/inference_wrapper.html#maxi.lib.inference.inference_wrapper.InferenceWrapper">InferenceWrapper</a>]) ‑> Tuple[OrderedDict[str, OrderedDict[str, numpy.ndarray]], Optional[float], Optional[float]]</span>
 </code></dt>
 <dd>
@@ -540,27 +484,15 @@ particular run. The keys follow this syntax</code></dt>
 <ul id="index">
 <li><h3>Super-module</h3>
 <ul>
-<li><code><a title="maxi.lib.explanation" href="../index.html">maxi.lib.explanation</a></code></li>
-</ul>
-</li>
-<li><h3><a href="#header-submodules">Sub-modules</a></h3>
-<ul>
-<li><code><a title="maxi.lib.explanation.wrappers.async_explanation" href="async_explanation.html">maxi.lib.explanation.wrappers.async_explanation</a></code></li>
-<li><code><a title="maxi.lib.explanation.wrappers.parameter_searcher" href="parameter_searcher.html">maxi.lib.explanation.wrappers.parameter_searcher</a></code></li>
+<li><code><a title="maxi.lib.explanation.wrappers" href="index.html">maxi.lib.explanation.wrappers</a></code></li>
 </ul>
 </li>
 <li><h3><a href="#header-classes">Classes</a></h3>
 <ul>
 <li>
-<h4><code><a title="maxi.lib.explanation.wrappers.AsyncExplanationWrapper" href="#maxi.lib.explanation.wrappers.AsyncExplanationWrapper">AsyncExplanationWrapper</a></code></h4>
+<h4><code><a title="maxi.lib.explanation.wrappers.parameter_searcher.ParameterSearchWrapper" href="#maxi.lib.explanation.wrappers.parameter_searcher.ParameterSearchWrapper">ParameterSearchWrapper</a></code></h4>
 <ul class="">
-<li><code><a title="maxi.lib.explanation.wrappers.AsyncExplanationWrapper.run" href="#maxi.lib.explanation.wrappers.AsyncExplanationWrapper.run">run</a></code></li>
-</ul>
-</li>
-<li>
-<h4><code><a title="maxi.lib.explanation.wrappers.ParameterSearchWrapper" href="#maxi.lib.explanation.wrappers.ParameterSearchWrapper">ParameterSearchWrapper</a></code></h4>
-<ul class="">
-<li><code><a title="maxi.lib.explanation.wrappers.ParameterSearchWrapper.run" href="#maxi.lib.explanation.wrappers.ParameterSearchWrapper.run">run</a></code></li>
+<li><code><a title="maxi.lib.explanation.wrappers.parameter_searcher.ParameterSearchWrapper.run" href="#maxi.lib.explanation.wrappers.parameter_searcher.ParameterSearchWrapper.run">run</a></code></li>
 </ul>
 </li>
 </ul>

@@ -36,7 +36,9 @@ from pathlib import Path
 
 def colorstr(*input):
     # Colors a string https://en.wikipedia.org/wiki/ANSI_escape_code, i.e.  colorstr(&#39;blue&#39;, &#39;hello world&#39;)
-    *args, string = input if len(input) &gt; 1 else (&#34;blue&#34;, &#34;bold&#34;, input[0])  # color arguments, string
+    *args, string = (
+        input if len(input) &gt; 1 else (&#34;blue&#34;, &#34;bold&#34;, input[0])
+    )  # color arguments, string
     colors = {
         &#34;black&#34;: &#34;\033[30m&#34;,  # basic colors
         &#34;red&#34;: &#34;\033[31m&#34;,
@@ -71,7 +73,11 @@ def check_requirements(requirements=&#34;requirements.txt&#34;, exclude=()):
         if not file.exists():
             print(f&#34;{prefix} {file.resolve()} not found, check failed.&#34;)
             return
-        requirements = [f&#34;{x.name}{x.specifier}&#34; for x in pkg.parse_requirements(file.open()) if x.name not in exclude]
+        requirements = [
+            f&#34;{x.name}{x.specifier}&#34;
+            for x in pkg.parse_requirements(file.open())
+            if x.name not in exclude
+        ]
     else:  # list or tuple of packages
         requirements = [x for x in requirements if x not in exclude]
 
@@ -81,7 +87,9 @@ def check_requirements(requirements=&#34;requirements.txt&#34;, exclude=()):
             pkg.require(r)
         except Exception as e:  # DistributionNotFound or VersionConflict if requirements not met
             n += 1
-            print(f&#34;{prefix} {r} not found and is required by pancake, attempting auto-update...&#34;)
+            print(
+                f&#34;{prefix} {r} not found and is required by pancake, attempting auto-update...&#34;
+            )
             print(subprocess.check_output(f&#34;pip install &#39;{r}&#39;&#34;, shell=True).decode())
 
     if n:  # if packages updated
@@ -93,7 +101,10 @@ def check_requirements(requirements=&#34;requirements.txt&#34;, exclude=()):
 
 
 def increment_path(
-    path: Union[str, Path] = Path(&#34;/xai/run&#34;), exist_ok: bool = False, sep: str = &#34;_&#34;, mkdir: bool = True
+    path: Union[str, Path] = Path(&#34;/xai/run&#34;),
+    exist_ok: bool = False,
+    sep: str = &#34;_&#34;,
+    mkdir: bool = True,
 ) -&gt; Path:
     # Increment file or directory path, i.e. runs/exp --&gt; runs/exp{sep}2, runs/exp{sep}3, ... etc.
     path = Path(path)  # os-agnostic
@@ -121,17 +132,27 @@ import torch
 
 
 def to_numpy(data: Union[np.ndarray, tf.Tensor, torch.Tensor]) -&gt; np.ndarray:
-    if type(data) in [np.ndarray, np.float32, np.float64, np.int32, np.int64, float, int]:
+    if type(data) in [
+        np.ndarray,
+        np.float32,
+        np.float64,
+        np.int32,
+        np.int64,
+        float,
+        int,
+    ]:
         return data
     elif type(data) is tf.Tensor:
         return data.numpy()
     elif type(data) is torch.Tensor:
-        return data.detach().numpy()
+        return data.cpu().detach().numpy()
     else:
         try:
             return data.numpy()
         except Exception as e:
-            raise ValueError(f&#34;Cannot convert data of type &#39;{type(data)}&#39; to a numpy array.&#34;) from e</code></pre>
+            raise ValueError(
+                f&#34;Cannot convert data of type &#39;{type(data)}&#39; to a numpy array.&#34;
+            ) from e</code></pre>
 </details>
 </section>
 <section>
@@ -173,7 +194,11 @@ def to_numpy(data: Union[np.ndarray, tf.Tensor, torch.Tensor]) -&gt; np.ndarray:
         if not file.exists():
             print(f&#34;{prefix} {file.resolve()} not found, check failed.&#34;)
             return
-        requirements = [f&#34;{x.name}{x.specifier}&#34; for x in pkg.parse_requirements(file.open()) if x.name not in exclude]
+        requirements = [
+            f&#34;{x.name}{x.specifier}&#34;
+            for x in pkg.parse_requirements(file.open())
+            if x.name not in exclude
+        ]
     else:  # list or tuple of packages
         requirements = [x for x in requirements if x not in exclude]
 
@@ -183,7 +208,9 @@ def to_numpy(data: Union[np.ndarray, tf.Tensor, torch.Tensor]) -&gt; np.ndarray:
             pkg.require(r)
         except Exception as e:  # DistributionNotFound or VersionConflict if requirements not met
             n += 1
-            print(f&#34;{prefix} {r} not found and is required by pancake, attempting auto-update...&#34;)
+            print(
+                f&#34;{prefix} {r} not found and is required by pancake, attempting auto-update...&#34;
+            )
             print(subprocess.check_output(f&#34;pip install &#39;{r}&#39;&#34;, shell=True).decode())
 
     if n:  # if packages updated
@@ -205,7 +232,9 @@ def to_numpy(data: Union[np.ndarray, tf.Tensor, torch.Tensor]) -&gt; np.ndarray:
 </summary>
 <pre><code class="python">def colorstr(*input):
     # Colors a string https://en.wikipedia.org/wiki/ANSI_escape_code, i.e.  colorstr(&#39;blue&#39;, &#39;hello world&#39;)
-    *args, string = input if len(input) &gt; 1 else (&#34;blue&#34;, &#34;bold&#34;, input[0])  # color arguments, string
+    *args, string = (
+        input if len(input) &gt; 1 else (&#34;blue&#34;, &#34;bold&#34;, input[0])
+    )  # color arguments, string
     colors = {
         &#34;black&#34;: &#34;\033[30m&#34;,  # basic colors
         &#34;red&#34;: &#34;\033[31m&#34;,
@@ -240,7 +269,10 @@ def to_numpy(data: Union[np.ndarray, tf.Tensor, torch.Tensor]) -&gt; np.ndarray:
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def increment_path(
-    path: Union[str, Path] = Path(&#34;/xai/run&#34;), exist_ok: bool = False, sep: str = &#34;_&#34;, mkdir: bool = True
+    path: Union[str, Path] = Path(&#34;/xai/run&#34;),
+    exist_ok: bool = False,
+    sep: str = &#34;_&#34;,
+    mkdir: bool = True,
 ) -&gt; Path:
     # Increment file or directory path, i.e. runs/exp --&gt; runs/exp{sep}2, runs/exp{sep}3, ... etc.
     path = Path(path)  # os-agnostic
@@ -268,17 +300,27 @@ def to_numpy(data: Union[np.ndarray, tf.Tensor, torch.Tensor]) -&gt; np.ndarray:
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def to_numpy(data: Union[np.ndarray, tf.Tensor, torch.Tensor]) -&gt; np.ndarray:
-    if type(data) in [np.ndarray, np.float32, np.float64, np.int32, np.int64, float, int]:
+    if type(data) in [
+        np.ndarray,
+        np.float32,
+        np.float64,
+        np.int32,
+        np.int64,
+        float,
+        int,
+    ]:
         return data
     elif type(data) is tf.Tensor:
         return data.numpy()
     elif type(data) is torch.Tensor:
-        return data.detach().numpy()
+        return data.cpu().detach().numpy()
     else:
         try:
             return data.numpy()
         except Exception as e:
-            raise ValueError(f&#34;Cannot convert data of type &#39;{type(data)}&#39; to a numpy array.&#34;) from e</code></pre>
+            raise ValueError(
+                f&#34;Cannot convert data of type &#39;{type(data)}&#39; to a numpy array.&#34;
+            ) from e</code></pre>
 </details>
 </dd>
 </dl>

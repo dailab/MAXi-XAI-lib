@@ -20,7 +20,10 @@ from ...utils.general import to_numpy
 class CEMLoss(BaseExplanationModel):
     compatible_grad_methods = [URVGradientEstimator, USRVGradientEstimator]
     # pp_x0_generator, pn_x0_generator = lambda x: x, np.zeros_like
-    pp_x0_generator, pn_x0_generator = lambda x: x, loss_utils.generate_from_gaussian
+    pp_x0_generator, pn_x0_generator = (
+        lambda x: x,
+        loss_utils.generate_from_gaussian,
+    )
 
     def __init__(
         self,
@@ -60,10 +63,14 @@ class CEMLoss(BaseExplanationModel):
             channels_first (bool, optional): Whether the channels dimension comes before the width and height \
                 dimensions as in [bs, channels, width, height].
             
+        Configurable Parameters:
+            c, gamma, K, AE, channels_first
+            
         Note:
             The hardcoded lower and upper bounds in ```_init_lower_upper()``` are tailored for images with \
             pixel range of [0, 1] or [0, 255]. For other ranges, it is required to specify it accordingly.\
             Otherwise it might strongly adulterate the results.
+            
         """
         self._setup_mode(mode)
         self._init_lower_upper(lower, upper, org_img)

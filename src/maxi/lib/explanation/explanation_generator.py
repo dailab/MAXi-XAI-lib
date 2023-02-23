@@ -16,9 +16,9 @@ from ..computation_components.optimizer.ada_exp_grad import AdaExpGradOptimizer
 from ..loss.base_explanation_model import BaseExplanationModel
 from ..loss.cem_loss import CEMLoss
 from ..inference.inference_wrapper import InferenceWrapper
+from ..image_segmentation import BaseSegmentationHandler
 from ...data.data_types import MetaData
 from ...utils import logger, general
-from ...utils.superpixel_handler import SuperpixelHandler
 
 
 class ExplanationGenerator:
@@ -27,12 +27,11 @@ class ExplanationGenerator:
         loss: Type[BaseExplanationModel] = CEMLoss,
         optimizer: Type[BaseOptimizer] = AdaExpGradOptimizer,
         gradient: Type[BaseGradient] = URVGradientEstimator,
-        superpixel_mode: bool = False,
-        sp_algorithm: str = "SLIC",
+        sg_algorithm: Type[BaseSegmentationHandler] = None,
         loss_kwargs: Dict[str, str] = None,
         optimizer_kwargs: Dict[str, str] = None,
         gradient_kwargs: Dict[str, str] = None,
-        sp_kwargs: Dict[str, str] = None,
+        sg_kwargs: Dict[str, str] = None,
         num_iter: int = 30,
         save_freq: int = np.inf,
         verbose: bool = False,
@@ -47,6 +46,9 @@ class ExplanationGenerator:
             poses as the loss function of an explanation method incorporated by the optimizer algorithm.
             After calling the ``run()`` method the optimizer starts producing a perturbed image (x_0) which \
             will get altered and optimized. \
+            Optionally, the ``SegmentationHandler`` can be used to segment the image into regions of interest. \
+            In order to use the ``SegmentationHandler`` the ``ExplanationModel`` has to be compatible with it. \
+            See the ``SegmentationHandler`` documentation for more information. \
             One can also specify the frequency of which savepoints are going to be created.
 
         Args:
@@ -56,12 +58,16 @@ class ExplanationGenerator:
                 algorithm. Defaults to AdaExpGradOptimizer.
             gradient (Type[BaseGradient], optional): Subclass instance of ``BaseGradient`` - a particular gradient \
                 method. Defaults to GradientEstimator.
+            sg_algorithm (Type[BaseSegmentationHandler], optional): Subclass of ``BaseSegmentationHandler`` - \
+                chosen segmentation algorithm. Defaults to None.
             loss_kwargs (Dict[str, str], optional): Keyword arguments to be parsed to the loss function initilization.
                 Defaults to { "mode": "PP", "gamma": 75, "K": 10, "AE": None}.
             optimizer_kwargs (Dict[str, str], optional): Keyword arguments to be parsed to the optimizer initilization.
                 Defaults to {"l1": 0.5, "l2": 0.5, "eta": 1.0}.
             gradient_kwargs (Dict[str, str], optional): Keyword arguments to be parsed to the gradient method \
                 initilization. Defaults to {"mu": None}.
+            sg_kwargs (Dict[str, str], optional): Keyword arguments to be parsed to the segmentation algorithm. 
+                Defaults to None. \
             num_iter (int, optional): Number of optimization iterations. Defaults to 30.
             save_freq (int, optional): Frequency of optimizer updates after which the object of optimization is saved. \
                 The savepoints will be stored in an OrderedDict and eventually returned. Defaults to np.inf \
@@ -75,6 +81,7 @@ class ExplanationGenerator:
         if gradient_kwargs is None:
             gradient_kwargs = {"mu": None}
 
+        ExplanationGenerator._check_parsed_args(sg_algorithm, loss, optimizer, gradient)
         self.loss, self.optimizer, self.gradient = loss, optimizer, gradient
         self._loss_kwargs, self._optimizer_kwargs, self._gradient_kwargs = (
             loss_kwargs,
@@ -86,14 +93,36 @@ class ExplanationGenerator:
 
         self.log_freq, self.save_freq = 1, min(save_freq, num_iter)
 
-        self._superpixel_mode, self._sp_algorithm, self._sp_kwargs = (
-            superpixel_mode,
-            sp_algorithm,
-            sp_kwargs,
-        )
+        (
+            self._superpixel_mode,
+            self._sg_algorithm,
+            self._sg_kwargs,
+            self.superpixel_handler,
+        ) = ("superpixel" in loss.__name__.lower(), sg_algorithm, sg_kwargs, None)
+
+        if self._superpixel_mode and self._sg_kwargs is None:
+            self._sg_kwargs = {}
 
         self.logging_cb = logger._callback
         self.verbose = verbose
+
+    @staticmethod
+    def _check_parsed_args(
+        sg_algorithm: Type[BaseSegmentationHandler],
+        loss: Type[BaseExplanationModel],
+        optimizer: Type[BaseOptimizer],
+        gradient: Type[BaseGradient],
+    ) -> None:
+        if sg_algorithm and not issubclass(sg_algorithm, BaseSegmentationHandler):
+            raise TypeError(
+                "Segmentation algorithm must be a subclass of BaseSegmentationHandler"
+            )
+        if not issubclass(loss, BaseExplanationModel):
+            raise TypeError("Loss must be a subclass of BaseExplanationModel")
+        if not issubclass(optimizer, BaseOptimizer):
+            raise TypeError("Optimizer must be a subclass of BaseOptimizer")
+        if not issubclass(gradient, BaseGradient):
+            raise TypeError("Gradient must be a subclass of BaseGradient")
 
     def _init_components(
         self,
@@ -107,12 +136,12 @@ class ExplanationGenerator:
             inference_call (Union[Callable[[np.ndarray], np.ndarray], InferenceWrapper]): Inference method returning explanation model \
                 compatible predictions. E.g. classification format as in [0.3, 0.2, 3.7].
         Returns:
-            Tuple[BaseExplanationModel, BaseGradient, BaseOptimizer]: [description]
+            Tuple[BaseExplanationModel, BaseGradient, BaseOptimizer]: Initialized components.
         """
+
+        # Segmentation mode
         if self._superpixel_mode:
-            self.superpixel_handler = SuperpixelHandler(
-                image=image, sp_algorithm=self._sp_algorithm, sp_kwargs=self._sp_kwargs
-            )
+            self.superpixel_handler = self._sg_algorithm(image=image, **self._sg_kwargs)
 
         # Loss function
         loss_instance: BaseExplanationModel = self.loss(
@@ -220,16 +249,18 @@ class ExplanationGenerator:
             inference_call and type(inference_call) is not bool
         ), "Inference is of None Type"
 
-        try:
-            loss, gradient, optimizer = self._init_components(image, inference_call)
-            return self._explain(optimizer), meta_data
-        except Exception as exc:
-            print(f"An exception occured: \n {exc}")
-            traceback.print_exc()
-            exit()
+        # try:
+        loss, gradient, optimizer = self._init_components(image, inference_call)
+        return self._explain(optimizer), meta_data
+        # except Exception as exc:
+        #     print(f"An exception occured: \n {exc}")
+        #     traceback.print_exc()
+        #     exit()
 
     def __copy__(self):
-        raise NotImplementedError("Copy is not implemented")
+        raise NotImplementedError(
+            "Copy is not implemented. Asynchronous execution currently not supported."
+        )
         return type(self)(
             self.loss,
             self.optimizer,
