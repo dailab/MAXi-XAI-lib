@@ -7,6 +7,7 @@ For developers, it is suggested that you take a look at the Python documentation
 **Currently implemented explanation methods**:
 
 - “[_Explanations based on the Missing: Towards Contrastive Explanations with Pertinent Negatives_](https://arxiv.org/abs/1802.07623)”
+- “[_"Why Should I Trust You?": Explaining the Predictions of Any Classifier_](https://arxiv.org/abs/1602.04938)” aka LIME
 
 ## Table of Contents
 
