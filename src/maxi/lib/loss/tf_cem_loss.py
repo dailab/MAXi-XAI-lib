@@ -68,8 +68,11 @@ class TF_CEMLoss(CEMLoss):
             lower=lower,
             upper=upper,
             channels_first=channels_first,
+            **kwargs,
         )
-        self._org_img_shape = tf.constant(org_img.shape)
+        # self._org_img_shape = tf.constant(org_img.shape)
+        if hasattr(self, "pn_target") and type(self.pn_target) != tf.Tensor:
+            self.pn_target = tf.convert_to_tensor(self.pn_target, dtype=tf.int32)
 
     def get_target_idx(self, org_img: tf.Tensor) -> tf.int32:
         """Retrieves index of the originally classified class in the inference result
@@ -158,11 +161,19 @@ class TF_CEMLoss(CEMLoss):
             tf.Tensor: negative f_K term loss value, 2D tensor of shape (bs, 1).
         """
         pred = self.inference(self.org_img + delta)
-        return tf.maximum(
-            loss_utils.tf_extract_target_proba(pred, self.target)
-            - loss_utils.tf_extract_nontarget_proba(pred, self.target),
-            -self.K,
-        )
+        if not hasattr(self, "pn_target"):
+            attack_value = tf.maximum(
+                loss_utils.tf_extract_target_proba(pred, self.target)
+                - loss_utils.tf_extract_nontarget_proba(pred, self.target),
+                -self.K,
+            )
+        else:
+            attack_value = tf.maximum(
+                loss_utils.tf_extract_target_proba(pred, self.target)
+                - loss_utils.tf_extract_target_proba(pred, self.pn_target),
+                -self.K,
+            )
+        return attack_value
 
     def f_K_pos(self, delta: tf.Tensor) -> tf.Tensor:
         """f_K term for the pertinent positive
@@ -191,9 +202,14 @@ class TF_CEMLoss(CEMLoss):
         """
         pred = self.inference(self.org_img + delta)
 
-        attack_value = loss_utils.tf_extract_target_proba(
-            pred, self.target
-        ) - loss_utils.tf_extract_nontarget_proba(pred, self.target)
+        if not hasattr(self, "pn_target"):
+            attack_value = loss_utils.tf_extract_target_proba(
+                pred, self.target
+            ) - loss_utils.tf_extract_nontarget_proba(pred, self.target)
+        else:
+            attack_value = loss_utils.tf_extract_target_proba(
+                pred, self.target
+            ) - loss_utils.tf_extract_target_proba(pred, self.pn_target)
 
         if attack_value < -10:
             return tf.math.log(1.0 + tf.math.exp(attack_value))

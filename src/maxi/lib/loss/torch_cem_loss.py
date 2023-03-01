@@ -70,6 +70,8 @@ class Torch_CEMLoss(CEMLoss):
             upper=upper,
             channels_first=channels_first,
         )
+        if hasattr(self, "pn_target") and type(self.pn_target) is np.ndarray:
+            self.pn_target = torch.tensor(self.pn_target, dtype=torch.float32)
 
     def get_target_idx(self, org_img: torch.Tensor) -> torch.int64:
         """Retrieves index of the originally classified class in the inference result
@@ -142,10 +144,18 @@ class Torch_CEMLoss(CEMLoss):
             torch.Tensor: negative f_K term loss value, 2D tensor of shape (bs, 1).
         """
         pred = self.inference(self.org_img + delta)
-        return torch.maximum(
-            loss_utils.torch_extract_target_proba(pred, self.target)
-            - loss_utils.torch_extract_nontarget_proba(pred, self.target),
-            -self.K,
+        return (
+            torch.maximum(
+                loss_utils.torch_extract_target_proba(pred, self.target)
+                - loss_utils.torch_extract_target_proba(pred, self.pn_target),
+                -self.K,
+            )
+            if hasattr(self, "pn_target")
+            else torch.maximum(
+                loss_utils.torch_extract_target_proba(pred, self.target)
+                - loss_utils.torch_extract_nontarget_proba(pred, self.target),
+                -self.K,
+            )
         )
 
     def f_K_pos(self, delta: torch.Tensor) -> torch.Tensor:
@@ -174,9 +184,14 @@ class Torch_CEMLoss(CEMLoss):
             torch.Tensor: negative f_K term loss value, 2D tensor of shape (bs, 1).
         """
         pred = self.inference(self.org_img + delta)
-        attack_value = loss_utils.torch_extract_target_proba(
-            pred, self.target
-        ) - loss_utils.torch_extract_nontarget_proba(pred, self.target)
+        if hasattr(self, "pn_target"):
+            attack_value = loss_utils.torch_extract_target_proba(
+                pred, self.target
+            ) - loss_utils.torch_extract_nontarget_proba(pred, self.target)
+        else:
+            attack_value = loss_utils.torch_extract_target_proba(
+                pred, self.target
+            ) - loss_utils.torch_extract_nontarget_proba(pred, self.pn_target)
 
         if attack_value < -10:
             return attack_value + torch.log(1.0 / torch.exp(attack_value) + 1)

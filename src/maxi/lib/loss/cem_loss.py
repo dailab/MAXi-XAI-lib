@@ -6,6 +6,7 @@ from typing import Callable, Union
 
 import numpy as np
 from numpy.linalg import norm
+from warnings import warn
 
 from .base_explanation_model import BaseExplanationModel
 from ..computation_components.gradient import (
@@ -91,6 +92,9 @@ class CEMLoss(BaseExplanationModel):
         # channel dimension
         self._c_dim = 1 if channels_first else -1  # 1 channels first, -1 channels last
 
+        # read pn target
+        self._read_pn_target_from_kwargs(kwargs)
+
     def _init_lower_upper(
         self,
         lower: Union[None, np.ndarray],
@@ -141,11 +145,6 @@ class CEMLoss(BaseExplanationModel):
         }, "Provided unknown mode for CEM"
         self.mode = input.upper()
 
-        self.get_loss, self._x0_generator = (
-            (self.PP, CEMLoss.pp_x0_generator)
-            if self.mode == "PP"
-            else (self.PN, CEMLoss.pn_x0_generator)
-        )
         if self.mode == "PP":
             self.get_loss, self._x0_generator = (self.PP, CEMLoss.pp_x0_generator)
         elif self.mode == "PN":
@@ -177,6 +176,18 @@ class CEMLoss(BaseExplanationModel):
             len(res) == 1
         ), "Loss class currently does not support batched calculations"
         return np.argmax(to_numpy(res))  # index of the original prediction
+
+    def _read_pn_target_from_kwargs(self, kwargs: dict) -> None:
+        if "pn_target" in kwargs:
+            if "PP" in self.mode:
+                warn("PN target class is given but not used in PP mode.")
+                return
+            self.pn_target = np.array([kwargs["pn_target"]])
+
+        if self.target == self.pn_target:
+            raise ValueError(
+                f"Target class ({self.target}) and PN target class ({self.pn_target}) are the same."
+            )
 
     def get_loss(self, data: np.ndarray, *args, **kwargs) -> np.ndarray:
         return super().get_loss(data)
@@ -247,10 +258,19 @@ class CEMLoss(BaseExplanationModel):
             np.ndarray: negative f_K term loss value, 2D array of shape (bs, 1).
         """
         pred = self.inference(self.org_img + delta)
-        return np.maximum(
-            loss_utils.np_extract_target_proba(pred, self.target)
-            - loss_utils.np_extract_nontarget_proba(pred, self.target),
-            -self.K,
+
+        return (
+            np.maximum(
+                loss_utils.np_extract_target_proba(pred, self.target)
+                - loss_utils.np_extract_target_proba(pred, self.pn_target),
+                -self.K,
+            )
+            if hasattr(self, "pn_target")
+            else np.maximum(
+                loss_utils.np_extract_target_proba(pred, self.target)
+                - loss_utils.np_extract_nontarget_proba(pred, self.target),
+                -self.K,
+            )
         )
 
     def f_K_pos(self, delta: np.ndarray) -> np.ndarray:
@@ -279,9 +299,16 @@ class CEMLoss(BaseExplanationModel):
             np.ndarray: negative f_K term loss value, 2D array of shape (bs, 1).
         """
         pred = self.inference(self.org_img + delta)
-        attack_value = loss_utils.np_extract_target_proba(
-            pred, self.target
-        ) - loss_utils.np_extract_nontarget_proba(pred, self.target)
+
+        if not hasattr(self, "pn_target"):
+            attack_value = loss_utils.np_extract_target_proba(
+                pred, self.target
+            ) - loss_utils.np_extract_nontarget_proba(pred, self.target)
+        else:
+            # difference between value of originally predicted class and value of pn_target class
+            attack_value = loss_utils.np_extract_target_proba(
+                pred, self.target
+            ) - loss_utils.np_extract_target_proba(pred, self.pn_target)
 
         if attack_value < -10:
             return np.log(1.0 + np.exp(attack_value))
