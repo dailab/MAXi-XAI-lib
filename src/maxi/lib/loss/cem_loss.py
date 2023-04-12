@@ -184,10 +184,10 @@ class CEMLoss(BaseExplanationModel):
                 return
             self.pn_target = np.array([kwargs["pn_target"]])
 
-        if self.target == self.pn_target:
-            raise ValueError(
-                f"Target class ({self.target}) and PN target class ({self.pn_target}) are the same."
-            )
+            if self.target == self.pn_target:
+                raise ValueError(
+                    f"Target class ({self.target}) and PN target class ({self.pn_target}) are the same."
+                )
 
     def get_loss(self, data: np.ndarray, *args, **kwargs) -> np.ndarray:
         return super().get_loss(data)
@@ -325,9 +325,9 @@ class CEMLoss(BaseExplanationModel):
             np.ndarray: positive f_K term loss value, 2D array of shape (bs, 1).
         """
         pred = self.inference(delta)
-        attack_value = loss_utils.np_extract_target_proba(
+        attack_value = loss_utils.np_extract_nontarget_proba(
             pred, self.target
-        ) - loss_utils.np_extract_nontarget_proba(pred, self.target)
+        ) - loss_utils.np_extract_target_proba(pred, self.target)
 
         if attack_value < -10:
             return np.log(1.0 + np.exp(attack_value))
