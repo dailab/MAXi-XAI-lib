@@ -15,7 +15,17 @@ from ..computation_components.gradient import (
 )
 from ...data.data_types import InferenceCall
 from ...utils import loss_utils, x0_generators
-from ...utils.general import to_numpy
+from ...utils.general import to_numpy, channel_format
+
+from enum import Enum
+
+
+class CEM_Modes(Enum):
+    PP = "PP"
+    PN = "PN"
+    PPSMOOTH = "PPSMOOTH"
+    PNSMOOTH = "PNSMOOTH"
+    EUCL_PP = "EUCL_PP"
 
 
 class CEMLoss(BaseExplanationModel):
@@ -37,7 +47,7 @@ class CEMLoss(BaseExplanationModel):
         AE: Callable[[np.ndarray], np.ndarray] = None,
         lower: np.ndarray = None,
         upper: np.ndarray = None,
-        channels_first: bool = False,
+        channels_first: bool = None,
         *args,
         **kwargs,
     ):
@@ -73,7 +83,7 @@ class CEMLoss(BaseExplanationModel):
             Otherwise it might strongly adulterate the results.
             
         """
-        self._setup_mode(mode)
+        self.get_loss, self._x0_generator = self._setup_mode(mode)
         self._init_lower_upper(lower, upper, org_img)
 
         super().__init__(
@@ -87,10 +97,18 @@ class CEMLoss(BaseExplanationModel):
         # loss parameters
         self.c, self.gamma, self.AE, self.K = c, gamma, AE, K
         self.org_img, self._org_img_shape = org_img, org_img.shape
-        self.target = self.get_target_idx(org_img)
+        self.target = (
+            self.get_target_idx(org_img)
+            if self.mode != CEM_Modes.EUCL_PP.value
+            else None
+        )
 
         # channel dimension
-        self._c_dim = 1 if channels_first else -1  # 1 channels first, -1 channels last
+        if channels_first is None:
+            self._channels_first = channel_format(org_img) == "channels_first"
+        self._c_dim = (
+            1 if self._channels_first else -1
+        )  # 1 channels first, -1 channels last
 
         # read pn target
         self._read_pn_target_from_kwargs(kwargs)
@@ -102,19 +120,20 @@ class CEMLoss(BaseExplanationModel):
         org_img: np.ndarray,
     ):
         DEFAULT_LB_UB = {
-            "PP": {
+            CEM_Modes.PP.value: {
                 "lower": np.full(org_img.shape, 0.0),
                 # "lower": np.zeros(org_img.shape),
                 "upper": to_numpy(org_img),
             },
-            "PN": {
+            CEM_Modes.PN.value: {
                 "lower": np.full(org_img.shape, -1.0),
                 # "upper": 1.0 - to_numpy(org_img),
                 "upper": np.full(org_img.shape, 1.0),
             },
         }
-        DEFAULT_LB_UB["PPSMOOTH"] = DEFAULT_LB_UB["PP"]
-        DEFAULT_LB_UB["PNSMOOTH"] = DEFAULT_LB_UB["PN"]
+        DEFAULT_LB_UB[CEM_Modes.PPSMOOTH.value] = DEFAULT_LB_UB[CEM_Modes.PP.value]
+        DEFAULT_LB_UB[CEM_Modes.PNSMOOTH.value] = DEFAULT_LB_UB[CEM_Modes.PN.value]
+        DEFAULT_LB_UB[CEM_Modes.EUCL_PP.value] = DEFAULT_LB_UB[CEM_Modes.PP.value]
 
         self._lower = DEFAULT_LB_UB[self.mode]["lower"] if lower is None else lower
         self._upper = DEFAULT_LB_UB[self.mode]["upper"] if upper is None else upper
@@ -137,28 +156,21 @@ class CEMLoss(BaseExplanationModel):
             )
 
     def _setup_mode(self, input: str):
-        assert input.upper() in {
-            "PP",
-            "PN",
-            "PPSMOOTH",
-            "PNSMOOTH",
-        }, "Provided unknown mode for CEM"
         self.mode = input.upper()
 
-        if self.mode == "PP":
-            self.get_loss, self._x0_generator = (self.PP, CEMLoss.pp_x0_generator)
-        elif self.mode == "PN":
-            self.get_loss, self._x0_generator = (self.PN, CEMLoss.pn_x0_generator)
-        elif self.mode == "PPSMOOTH":
-            self.get_loss, self._x0_generator = (
-                self.PP_smooth,
-                CEMLoss.pp_x0_generator,
-            )
-        else:
-            self.get_loss, self._x0_generator = (
-                self.PN_smooth,
-                CEMLoss.pn_x0_generator,
-            )
+        assert (
+            self.mode in CEM_Modes.__members__
+        ), f"Invalid mode {self.mode} given. Valid modes are {CEM_Modes.__members__}"
+
+        modes = {
+            CEM_Modes.PP.value: (self.PP, CEMLoss.pp_x0_generator),
+            CEM_Modes.PN.value: (self.PN, CEMLoss.pn_x0_generator),
+            CEM_Modes.PPSMOOTH.value: (self.PP_smooth, CEMLoss.pp_x0_generator),
+            CEM_Modes.PNSMOOTH.value: (self.PN_smooth, CEMLoss.pn_x0_generator),
+            CEM_Modes.EUCL_PP.value: (self.Eucl_PP, CEMLoss.pp_x0_generator),
+        }
+
+        return modes[self.mode]
 
     def get_target_idx(self, org_img: np.ndarray) -> int:
         """Retrieves index of the originally classified class in the inference result
@@ -179,7 +191,7 @@ class CEMLoss(BaseExplanationModel):
 
     def _read_pn_target_from_kwargs(self, kwargs: dict) -> None:
         if "pn_target" in kwargs:
-            if "PP" in self.mode:
+            if CEM_Modes.PP.value in self.mode:
                 warn("PN target class is given but not used in PP mode.")
                 return
             self.pn_target = np.array([kwargs["pn_target"]])
@@ -245,6 +257,11 @@ class CEMLoss(BaseExplanationModel):
         # if delta.ndim < 2:
         #     delta = np.ascontiguousarray(delta.reshape(self._org_img_shape))
         return self.c * self.f_K_neg_smooth(delta) + self.gamma * self.PN_AE_error(
+            delta
+        )
+
+    def Eucl_PP(self, delta: np.ndarray) -> np.ndarray:
+        return self.c * self.f_K_pos_eucledian(delta) + self.gamma * self.PP_AE_error(
             delta
         )
 
@@ -353,6 +370,27 @@ class CEMLoss(BaseExplanationModel):
             )
             ** 2
         )
+
+    def f_K_pos_eucledian(self, delta: np.ndarray) -> np.ndarray:
+        pred = self.inference(delta)
+
+        if self._channels_first and channel_format(pred) == "channels_last":
+            pred = pred.reshape(1, self.org_img.shape[1], self.org_img.shape[2])
+            pred = pred.swapaxes(-1, 0).swapaxes(1, 0)
+            
+        else:
+            pred = pred.reshape(self.org_img.shape[-3], self.org_img.shape[-2], 1)
+
+        # assert (
+        #     pred.shape == self.org_img.shape
+        # ), "Shape of prediction and original image should be same"
+
+        attack_value = np.linalg.norm(pred - self.org_img) ** 2
+
+        if attack_value < -10:
+            return np.log(1.0 + np.exp(attack_value))
+        else:
+            return attack_value + np.log(1.0 + np.exp(-attack_value))
 
     def PP_AE_error(self, delta: np.ndarray) -> np.ndarray:
         """Autoencoder error term for the Pertinent Positive

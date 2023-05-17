@@ -22,7 +22,7 @@ class TF_CEMLoss(CEMLoss):
         AE: Callable[[np.ndarray], np.ndarray] = None,
         lower: np.ndarray = None,
         upper: np.ndarray = None,
-        channels_first: bool = False,
+        channels_first: bool = None,
         *args,
         **kwargs,
     ) -> None:

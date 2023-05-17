@@ -13,7 +13,7 @@ from ..computation_components.gradient import (
     USRVGradientEstimator,
 )
 from ...data.data_types import InferenceCall
-from ...utils.general import to_numpy
+from ...utils.general import to_numpy, channel_format
 
 
 class LimeLoss(BaseExplanationModel):
@@ -31,7 +31,7 @@ class LimeLoss(BaseExplanationModel):
         n_samples: int,
         lower: np.ndarray = None,
         upper: np.ndarray = None,
-        channels_first: bool = True,
+        channels_first: bool = None,
         *args,
         **kwargs,
     ):
@@ -66,7 +66,9 @@ class LimeLoss(BaseExplanationModel):
             upper=self._upper,
         )
         self.n_samples = n_samples
-        self.channels_first = channels_first
+        # channel dimension
+        if channels_first is None:
+            channels_first = channel_format(org_img) == "channels_first"
         if not hasattr(self, "superpixel_handler"):
             self._setup_loss_constants()
 
@@ -164,7 +166,7 @@ class LimeLoss(BaseExplanationModel):
         sigma = max(dist(self._stacked_org_img, self.org_img_plus_Z))
 
         # exponential kernel
-        self.locality_measure = lambda x, y: np.exp(-dist(x, y) ** 2 / sigma ** 2)
+        self.locality_measure = lambda x, y: np.exp(-dist(x, y) ** 2 / sigma**2)
 
     def _setup_loss_constants(self) -> None:
         """Setup constants for the loss function."""

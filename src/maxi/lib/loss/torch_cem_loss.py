@@ -17,13 +17,13 @@ class Torch_CEMLoss(CEMLoss):
         mode: str,
         org_img: np.ndarray,
         inference: InferenceCall,
-        gamma: float,
+        gamma: float = 1.0,
         K: float = 1.0,
         c: float = 1.0,
         AE: Callable[[np.ndarray], np.ndarray] = None,
         lower: np.ndarray = None,
         upper: np.ndarray = None,
-        channels_first: bool = False,
+        channels_first: bool = None,
         *args,
         **kwargs
     ) -> None:
