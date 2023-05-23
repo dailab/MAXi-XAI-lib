@@ -198,17 +198,16 @@ class Torch_CEMLoss(CEMLoss):
         else:
             return attack_value + torch.log(1.0 + torch.exp(-attack_value))
 
-    # TODO should get np.ndarray as input
-    def f_K_pos_smooth(self, delta: torch.Tensor) -> torch.Tensor:
+    def f_K_pos_smooth(self, delta: np.ndarray) -> torch.Tensor:
         """f_K term for the pertinent positive
 
         Args:
-            delta (torch.Tensor): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
 
         Returns:
             torch.Tensor: positive f_K term loss value, 2D tensor of shape (bs, 1).
         """
-        pred = self.inference(delta)
+        pred = self.inference(torch.Tensor(delta))
         attack_value = loss_utils.torch_extract_nontarget_proba(
             pred, self.target
         ) - loss_utils.torch_extract_target_proba(pred, self.target)
