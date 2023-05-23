@@ -14,7 +14,6 @@ matplotlib = "^3.4.2"
 numba = "0.50.0"
 opencv-python = "^4.5.4"
 scikit-image = "^0.18.3"
-mnist_tf = {path = "experiments/mnist", develop = true}
 torch = "^2.0.1"
 numpy = "^1.19.0"
 nptyping = "^1.4.4"
