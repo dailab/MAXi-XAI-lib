@@ -33,4 +33,4 @@ class Torch_Gradient(BaseGradient):
         loss = self.loss.get_loss(torch_data)
         loss.backward()
 
-        return torch_data.grad.numpy()
+        return torch_data.grad.cpu().numpy()
