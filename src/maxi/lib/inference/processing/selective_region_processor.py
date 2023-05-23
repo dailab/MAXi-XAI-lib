@@ -139,14 +139,22 @@ class Torch_SelectiveRegionProcessor(SelectiveRegionProcessor):
         assert (
             new_region.shape[0] == self.target["w"] and new_region.shape[1] == self.target["h"]
         ), "Parsed region is of different size compared to the target region"
-
-        tmp_image = (
-            torch.autograd.Variable(self.torch_orig_img.clone(), requires_grad=True)
-            if type(new_region) is torch.Tensor
-            else self.orig_img.copy()
+        tmp_image = torch.cat(
+            (
+                self.torch_orig_img[: self.target["x"], self.target["y"] : self.target["y"] + self.target["h"], :],
+                new_region,
+                self.torch_orig_img[
+                    self.target["x"] + self.target["w"] :, self.target["y"] : self.target["y"] + self.target["h"], :
+                ],
+            ),
+            dim=0,
         )
-        tmp_image[
-            self.target["x"] : self.target["x"] + self.target["w"],
-            self.target["y"] : self.target["y"] + self.target["h"],
-        ] = new_region
-        return tmp_image
+        tmp_image = torch.cat(
+            (
+                self.torch_orig_img[:, : self.target["y"], :],
+                tmp_image,
+                self.torch_orig_img[:, self.target["y"] + self.target["h"] :, :],
+            ),
+            dim=1,
+        )
+        return tmp_image.view((self.orig_img.shape[2], self.orig_img.shape[0], self.orig_img.shape[1]))
