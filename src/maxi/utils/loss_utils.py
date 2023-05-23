@@ -204,6 +204,8 @@ def torch_extract_nontarget_proba(P: torch.Tensor, t: torch.int64) -> torch.Tens
     """
     if P.ndim != 2:
         raise ValueError(f"Prediction should have dimension 2, but got {P.ndim}")
+    if t < 0 or t >= P.shape[1]:
+        raise ValueError(f"Target index {t} is out of bounds: [0, {P.shape[1]})")
 
     P_before_t = P[:, :t]
     P_after_t = P[:, t + 1 :]
