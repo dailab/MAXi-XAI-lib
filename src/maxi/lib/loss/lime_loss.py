@@ -110,8 +110,8 @@ class LimeLoss(BaseExplanationModel):
             ValueError: Lower bound matrix of different shape than the input image.
             ValueError: Upper bound matrix of different shape than the input image.
         """
-        assert type(lower) is np.ndarray, "Invalid lower bound given for optimization"
-        assert type(upper) is np.ndarray, "Invalid upper bound given for optimization"
+        assert type(lower) is np.ndarray, "Invalid lower bound given for optimization, lower bound has to be a numpy array"
+        assert type(upper) is np.ndarray, "Invalid upper bound given for optimization, upper bound has to be a numpy array"
 
         if not hasattr(self, "superpixel_handler"):
             if lower.shape != org_img.shape:

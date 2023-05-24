@@ -121,10 +121,10 @@ class CEMLoss(BaseExplanationModel):
 
         assert (
             type(self._lower) is np.ndarray
-        ), "Invalid lower bound given for optimization"
+        ), "Invalid lower bound given for optimization; self._lower is not a numpy array"
         assert (
             type(self._upper) is np.ndarray
-        ), "Invalid upper bound given for optimization"
+        ), "Invalid upper bound given for optimization; self._upper is not a numpy array"
 
         if self._lower.shape != org_img.shape:
             raise ValueError(
@@ -142,7 +142,7 @@ class CEMLoss(BaseExplanationModel):
             "PN",
             "PPSMOOTH",
             "PNSMOOTH",
-        }, "Provided unknown mode for CEM"
+        }, f"Provided unknown mode for CEM: {input}"
         self.mode = input.upper()
 
         if self.mode == "PP":
@@ -170,7 +170,7 @@ class CEMLoss(BaseExplanationModel):
             int: Index of the most likely class.
         """
         res = self.inference(org_img)
-        assert res.ndim == 2, "Inference result has to be an one dimensional array"
+        assert res.ndim == 2, f"Inference result has to be an one dimensional array, is {res.ndim}"
         assert len(res[0]) >= 2, "Inference result has to represent at least two states"
         assert (
             len(res) == 1
