@@ -116,7 +116,7 @@ class ParameterSearchWrapper:
                 3. index of the tuple contains the l2 value that produced negative loss. It's None, if after \
                     ```max_iter``` iterations of divion by 2 of l1 and l2 the attack loss is still positive.
         """
-        assert type(image) is np.ndarray and type(image) is not bool, "Image is of unsupported type"
+        assert type(image) is np.ndarray and type(image) is not bool, f"Image is of unsupported type {type(image)}"
         assert inference_call and type(inference_call) is not bool, "Inference is of None Type"
 
         # try:

@@ -244,7 +244,7 @@ class ExplanationGenerator:
         """
         assert (
             type(image) is np.ndarray and type(image) is not bool
-        ), "Image is of unsupported type"
+        ), f"Image is of unsupported type {type(image)}"
         assert (
             inference_call and type(inference_call) is not bool
         ), "Inference is of None Type"
