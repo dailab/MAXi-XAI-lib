@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "mnist_tf"
+name = "official_mnist_tf"
 version = "0.1.0"
 description = ""
 authors = ["Le, Tuan Anh <tuananh.le@dai-labor.de>"]
