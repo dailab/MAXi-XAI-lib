@@ -57,7 +57,9 @@ def check_requirements(requirements="requirements.txt", exclude=()):
     for r in requirements:
         try:
             pkg.require(r)
-        except Exception as e:  # DistributionNotFound or VersionConflict if requirements not met
+        except (
+            Exception
+        ) as e:  # DistributionNotFound or VersionConflict if requirements not met
             n += 1
             print(
                 f"{prefix} {r} not found and is required by pancake, attempting auto-update..."
@@ -125,3 +127,7 @@ def to_numpy(data: Union[np.ndarray, tf.Tensor, torch.Tensor]) -> np.ndarray:
             raise ValueError(
                 f"Cannot convert data of type '{type(data)}' to a numpy array."
             ) from e
+
+
+def channel_format(data: np.ndarray) -> str:
+    return "channels_first" if data.shape[0] in [1, 3, 4] else "channels_last"

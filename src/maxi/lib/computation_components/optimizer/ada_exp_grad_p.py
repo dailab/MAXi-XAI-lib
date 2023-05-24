@@ -49,11 +49,11 @@ class AdaExpGradP(object):
         self.l1 = l1
         self.l2 = l2
         self.eta = 0.0
-        self.p = eta
         self.D = 1.0
 
     def update(self):
         g = self.func_p(self.x)
+        # print(f"Gradient norm: {lina.norm(g)}")
         self.step(g)
         return self.x
 
@@ -62,7 +62,7 @@ class AdaExpGradP(object):
 
     def md(self, g):
         beta = 1.0 / self.d
-        eta_t = np.maximum(np.sqrt(self.eta) ** self.p, 1)
+        eta_t = np.maximum(np.sqrt(self.eta), 1)
         z = (np.log(np.abs(self.x) / beta + 1.0)) * np.sign(self.x) - g / eta_t
         v_sgn = np.sign(z)
         if self.l2 == 0.0:
@@ -89,13 +89,10 @@ class AdaExpGradP(object):
             np.linalg.norm((self.x).flatten(), ord=1),
             np.linalg.norm((v).flatten(), ord=1),
         )
-        # D_1=np.linalg.norm((self.x-v).flatten(), ord=1)**2
-        # D_2=np.sum(((np.log(np.abs(self.x) / beta + 1.0)) * np.sign(self.x)-(np.log(np.abs(v) / beta + 1.0)) * np.sign(v))*(self.x-v))
-        # print (D_2/D_1)
         self.eta += (
             eta_t / (D + 1) * np.linalg.norm((self.x - v).flatten(), ord=1)
         ) ** 2
-        eta_t_1 = np.maximum((self.eta) ** self.p, 1)
+        eta_t_1 = np.maximum(np.sqrt(self.eta), 1)
         self.x[:] = (1.0 - eta_t / eta_t_1) * self.x + eta_t / eta_t_1 * v
 
 
@@ -200,7 +197,7 @@ class AdaExpGradPOptimizer(BaseOptimizer):
         upper: np.ndarray,
         l1: float = 0.5,
         l2: float = 0.5,
-        eta: float = 1.0,
+        eta: float = 0.5,
         *args,
         **kwargs,
     ) -> None:

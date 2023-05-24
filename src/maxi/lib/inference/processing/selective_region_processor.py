@@ -90,14 +90,25 @@ class SelectiveRegionProcessor:
         Returns:
             np.ndarray: Segmentation mask of the target region. Shape in [self.w, self.h].
         """
-        assert (
-            segmentation_mask.shape[1:] == self.orig_img.shape[:2]
-        ), "Segmentation mask must be of the same shape as the original image"
-        return segmentation_mask[
-            :,
-            self.target["x"] : self.target["x"] + self.target["w"],
-            self.target["y"] : self.target["y"] + self.target["h"],
-        ]
+        if segmentation_mask.ndim >= 3:
+            assert (
+                segmentation_mask.shape[1:] == self.orig_img.shape[:2]
+            ), "Segmentation mask must be of the same shape as the original image"
+            return segmentation_mask[
+                :,
+                self.target["x"] : self.target["x"] + self.target["w"],
+                self.target["y"] : self.target["y"] + self.target["h"],
+            ]
+        elif segmentation_mask.ndim == 2:
+            assert (
+                segmentation_mask.shape == self.orig_img.shape[:2]
+            ), "Segmentation mask must be of the same shape as the original image"
+            return segmentation_mask[
+                self.target["x"] : self.target["x"] + self.target["w"],
+                self.target["y"] : self.target["y"] + self.target["h"],
+            ]
+        else:
+            raise NotImplementedError()
 
 
 class Torch_SelectiveRegionProcessor(SelectiveRegionProcessor):
