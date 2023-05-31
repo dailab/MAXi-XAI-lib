@@ -63,11 +63,11 @@ class Torch_CEMLoss(CEMLoss):
         self.device = device
         super().__init__(
             mode=mode,
-            org_img=torch.tensor(org_img, dtype=torch.float32),
+            org_img=torch.tensor(org_img, dtype=torch.float32, device=self.device),
             inference=inference,
-            c=torch.tensor(c, dtype=torch.float32),
-            gamma=torch.tensor(gamma, dtype=torch.float32),
-            K=torch.tensor(K, dtype=torch.float32),
+            c=torch.tensor(c, dtype=torch.float32, device=self.device),
+            gamma=torch.tensor(gamma, dtype=torch.float32, device=self.device),
+            K=torch.tensor(K, dtype=torch.float32, device=self.device),
             AE=AE,
             lower=lower,
             upper=upper,
@@ -85,7 +85,7 @@ class Torch_CEMLoss(CEMLoss):
         Returns:
             int: Index of the predicted classification result
         """
-        res = self.inference(torch.from_numpy(org_img).to(self.device))
+        res = self.inference(org_img)
         assert res.ndim == 2, "Inference result has to be a two dimensional array"
         assert len(res[0]) >= 2, "Inference result has to represent at least two states"
         assert len(res) == 1, "Loss class currently does not support batched calculations"
@@ -186,7 +186,7 @@ class Torch_CEMLoss(CEMLoss):
         Returns:
             torch.Tensor: negative f_K term loss value, 2D tensor of shape (bs, 1).
         """
-        pred = self.inference(torch.from_numpy(self.org_img).to(self.device) + torch.from_numpy(delta).to(self.device))
+        pred = self.inference(self.org_img + torch.from_numpy(delta).to(self.device))
         if hasattr(self, "pn_target"):
             attack_value = loss_utils.torch_extract_target_proba(
                 pred, self.target
@@ -210,6 +210,7 @@ class Torch_CEMLoss(CEMLoss):
         Returns:
             torch.Tensor: positive f_K term loss value, 2D tensor of shape (bs, 1).
         """
+        # TODO we don't we add the image here?
         pred = self.inference(torch.from_numpy(delta).to(self.device))
         attack_value = loss_utils.torch_extract_nontarget_proba(
             pred, self.target
