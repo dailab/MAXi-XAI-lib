@@ -1,5 +1,5 @@
 """[Torch] CEM Loss Function Module"""
-from typing import Callable, List, Tuple
+from typing import Callable, Union
 
 import numpy as np
 import torch
@@ -60,20 +60,21 @@ class Torch_CEMLoss(CEMLoss):
             Torch's automatic differentiation on this class' methods, the model must be implemented in Torch as well.
         """
         self.compatible_grad_methods += [Torch_Gradient]
+        self.device = device
         super().__init__(
             mode=mode,
-            org_img=torch.tensor(org_img, dtype=torch.float32, device=device),
+            org_img=torch.tensor(org_img, dtype=torch.float32, device=self.device),
             inference=inference,
-            c=torch.tensor(c, dtype=torch.float32, device=device),
-            gamma=torch.tensor(gamma, dtype=torch.float32, device=device),
-            K=torch.tensor(K, dtype=torch.float32, device=device),
+            c=torch.tensor(c, dtype=torch.float32, device=self.device),
+            gamma=torch.tensor(gamma, dtype=torch.float32, device=self.device),
+            K=torch.tensor(K, dtype=torch.float32, device=self.device),
             AE=AE,
             lower=lower,
             upper=upper,
             channels_first=channels_first,
         )
         if hasattr(self, "pn_target") and type(self.pn_target) is np.ndarray:
-            self.pn_target = torch.tensor(self.pn_target, dtype=torch.float32, device=device)
+            self.pn_target = torch.tensor(self.pn_target, dtype=torch.float32, device=self.device)
 
     def get_target_idx(self, org_img: np.ndarray) -> torch.int64:
         """Retrieves index of the originally classified class in the inference result
@@ -123,15 +124,17 @@ class Torch_CEMLoss(CEMLoss):
         """
         return super().PN_smooth(delta)
 
-    def PP_smooth(self, delta: np.ndarray) -> torch.Tensor:
+    def PP_smooth(self, delta: Union[torch.tensor, np.ndarray]) -> torch.Tensor:
         """_Smooth Pertinent Positive_ Loss Function
 
         Args:
-            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+            delta (Union[torch.tensor, np.ndarray]): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
 
         Returns:
             torch.Tensor: PP loss value(s), 2D tensor of shape (bs, 1).
         """
+        if isinstance(delta, np.ndarray):
+            delta = torch.from_numpy(delta).to(self.device)
         return super().PP_smooth(delta)
 
     def f_K_neg(self, delta: torch.Tensor) -> torch.Tensor:
