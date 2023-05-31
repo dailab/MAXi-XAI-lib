@@ -1,9 +1,12 @@
-import numpy as np
+import sys
+
 import matplotlib.pyplot as plt
+import maxi
+import numpy as np
 import tensorflow as tf
 
-import maxi
-from official_mnist_tf.train_mnist_model import load_mnist, init_model
+sys.path.append("../src")
+from official_mnist_tf.train_mnist_model import init_model, load_mnist
 
 
 def main():
@@ -11,10 +14,10 @@ def main():
     x_train, y_train, x_test, y_test = load_mnist()
     model = init_model()
     model.load_weights("./experiments/mnist/models/tf/tf")
-    
+
     _input = x_train[0].reshape(1, 28, 28)
     plt.imshow(_input.squeeze(axis=0), cmap="gray", vmin=0.0, vmax=1.0)
-    
+
     # chose desired component classes for the loss, optimizer and gradient
     loss_class = maxi.loss.TF_CEMLoss
     optimizer_class = maxi.optimizer.AdaExpGradOptimizer
@@ -41,7 +44,7 @@ def main():
         save_freq=150,
         verbose=False,
     )
-    
+
     # start the explanation procedure and retrieve the results
     results, _ = cem.run(image=_input, inference_call=model)
 
@@ -55,9 +58,11 @@ def main():
             vmin=0.0,
             vmax=1.0,
         )
-        
+
         pred = model(_input + result)
-        print(f"Iter: {iter_} || Prediction: {np.argmax(pred)} || Prediction Score: {np.max(pred, axis=1)}")
+        print(
+            f"Iter: {iter_} || Prediction: {np.argmax(pred)} || Prediction Score: {np.max(pred, axis=1)}"
+        )
 
     axarr[-1].title.set_text("Orig + Perturbation")
     axarr[-1].imshow(
@@ -67,5 +72,6 @@ def main():
         vmax=1.0,
     )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
