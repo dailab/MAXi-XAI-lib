@@ -17,13 +17,14 @@ torch = "^2.0.1"
 numpy = "^1.19.0"
 nptyping = "^1.4.4"
 torchvision = "^0.15.2"
-official_mnist_tf = {path = "experiments/mnist", develop = true}
 tensorflow = "^2.12.0"
 
 [tool.poetry.dev-dependencies]
 black = "^21.11b1"
 pdoc3 = "^0.10.0"
 jupyter = "^1.0.0"
+ipython = "<8.13.0"
+
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
