@@ -60,14 +60,13 @@ class Torch_CEMLoss(CEMLoss):
             Torch's automatic differentiation on this class' methods, the model must be implemented in Torch as well.
         """
         self.compatible_grad_methods += [Torch_Gradient]
-        self.device = device
         super().__init__(
             mode=mode,
-            org_img=torch.tensor(org_img, dtype=torch.float32, device=self.device),
+            org_img=torch.tensor(org_img, dtype=torch.float32, device=device),
             inference=inference,
-            c=torch.tensor(c, dtype=torch.float32, device=self.device),
-            gamma=torch.tensor(gamma, dtype=torch.float32, device=self.device),
-            K=torch.tensor(K, dtype=torch.float32, device=self.device),
+            c=torch.tensor(c, dtype=torch.float32, device=device),
+            gamma=torch.tensor(gamma, dtype=torch.float32, device=device),
+            K=torch.tensor(K, dtype=torch.float32, device=device),
             AE=AE,
             lower=lower,
             upper=upper,
@@ -135,7 +134,6 @@ class Torch_CEMLoss(CEMLoss):
         """
         return super().PP_smooth(delta)
 
-    # TODO should get np.ndarray as input
     def f_K_neg(self, delta: torch.Tensor) -> torch.Tensor:
         """f_K term for the pertinent negative
 
@@ -160,7 +158,6 @@ class Torch_CEMLoss(CEMLoss):
             )
         )
 
-    # TODO should get np.ndarray as input
     def f_K_pos(self, delta: torch.Tensor) -> torch.Tensor:
         """f_K term for the pertinent positive
 
@@ -177,16 +174,16 @@ class Torch_CEMLoss(CEMLoss):
             -self.K,
         )
 
-    def f_K_neg_smooth(self, delta: np.ndarray) -> torch.Tensor:
+    def f_K_neg_smooth(self, delta: torch.Tensor) -> torch.Tensor:
         """f_K term for the smooth pertinent negative
 
         Args:
-            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+            delta (torch.Tensor): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
 
         Returns:
             torch.Tensor: negative f_K term loss value, 2D tensor of shape (bs, 1).
         """
-        pred = self.inference(self.org_img + torch.from_numpy(delta).to(self.device))
+        pred = self.inference(self.org_img + delta)
         if hasattr(self, "pn_target"):
             attack_value = loss_utils.torch_extract_target_proba(
                 pred, self.target
@@ -201,17 +198,17 @@ class Torch_CEMLoss(CEMLoss):
         else:
             return attack_value + torch.log(1.0 + torch.exp(-attack_value))
 
-    def f_K_pos_smooth(self, delta: np.ndarray) -> torch.Tensor:
+    def f_K_pos_smooth(self, delta: torch.Tensor) -> torch.Tensor:
         """f_K term for the pertinent positive
 
         Args:
-            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+            delta (torch.Tensor): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
 
         Returns:
             torch.Tensor: positive f_K term loss value, 2D tensor of shape (bs, 1).
         """
         # TODO we don't we add the image here?
-        pred = self.inference(torch.from_numpy(delta).to(self.device))
+        pred = self.inference(delta)
         attack_value = loss_utils.torch_extract_nontarget_proba(
             pred, self.target
         ) - loss_utils.torch_extract_target_proba(pred, self.target)
@@ -221,7 +218,6 @@ class Torch_CEMLoss(CEMLoss):
         else:
             return attack_value + torch.log(1.0 + torch.exp(-attack_value))
 
-    # TODO should get np.ndarray as input
     def PN_AE_error(self, delta: torch.Tensor) -> torch.Tensor:
         """Autoencoder error term for the Pertinent Negative
 
@@ -236,7 +232,6 @@ class Torch_CEMLoss(CEMLoss):
         adv_img = self.org_img + delta
         return norm(norm(adv_img - self.AE(adv_img), axis=self._c_dim), axis=(-2, -1)) ** 2
 
-    # TODO should get np.ndarray as input
     def PP_AE_error(self, delta: torch.Tensor) -> torch.Tensor:
         """Autoencoder error term for the Pertinent Positive
 
