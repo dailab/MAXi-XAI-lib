@@ -134,7 +134,7 @@ class Torch_CEMLoss(CEMLoss):
             torch.Tensor: PP loss value(s), 2D tensor of shape (bs, 1).
         """
         if isinstance(delta, np.ndarray):
-            delta = torch.from_numpy(delta).to(self.device)
+            delta = torch.tensor(delta, dtype=torch.float32, device=self.device)
         return super().PP_smooth(delta)
 
     def f_K_neg(self, delta: torch.Tensor) -> torch.Tensor:
