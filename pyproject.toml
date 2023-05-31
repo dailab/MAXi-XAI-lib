@@ -6,7 +6,7 @@ authors = ["Tuan Anh, Le <tuananh.le@dai-labor.de>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = ">=3.8.0,<3.10"
+python = "^3.8"
 tensorflow = "^2.4.0"
 easydict = "^1.9"
 pyyaml = "^6.0"
