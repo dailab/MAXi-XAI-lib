@@ -60,6 +60,7 @@ class Torch_CEMLoss(CEMLoss):
             Torch's automatic differentiation on this class' methods, the model must be implemented in Torch as well.
         """
         self.compatible_grad_methods += [Torch_Gradient]
+        self.device = device
         super().__init__(
             mode=mode,
             org_img=torch.tensor(org_img, dtype=torch.float32),
@@ -72,7 +73,6 @@ class Torch_CEMLoss(CEMLoss):
             upper=upper,
             channels_first=channels_first,
         )
-        self.device = device
         if hasattr(self, "pn_target") and type(self.pn_target) is np.ndarray:
             self.pn_target = torch.tensor(self.pn_target, dtype=torch.float32)
 
