@@ -18,6 +18,7 @@ class Torch_CEMLoss(CEMLoss):
         org_img: np.ndarray,
         inference: InferenceCall,
         gamma: float,
+        device: str = "cpu",
         K: float = 1.0,
         c: float = 1.0,
         AE: Callable[[np.ndarray], np.ndarray] = None,
@@ -40,6 +41,7 @@ class Torch_CEMLoss(CEMLoss):
                 interpretable representation of the underlying prediction, e.g. a binary vector indicating \
                 the “presence” or “absence”.
             c (float): $$f_K$$ regularization coefficient.
+            device (str, optional): Computation device. Defaults to "cpu".
             gamma (float): Regularization coefficient for the autoencoder term.
             K (float): Confidence parameter for seperation between probability of target and non-target value.
             AE (Callable[[ndarray], ndarray]): Autoencoder, if None disregard AE error term.
@@ -70,10 +72,11 @@ class Torch_CEMLoss(CEMLoss):
             upper=upper,
             channels_first=channels_first,
         )
+        self.device = device
         if hasattr(self, "pn_target") and type(self.pn_target) is np.ndarray:
             self.pn_target = torch.tensor(self.pn_target, dtype=torch.float32)
 
-    def get_target_idx(self, org_img: torch.Tensor) -> torch.int64:
+    def get_target_idx(self, org_img: np.ndarray) -> torch.int64:
         """Retrieves index of the originally classified class in the inference result
 
         Args:
@@ -82,11 +85,11 @@ class Torch_CEMLoss(CEMLoss):
         Returns:
             int: Index of the predicted classification result
         """
-        res = self.inference(org_img)
+        res = self.inference(torch.Tensor(org_img, device=self.device))
         assert res.ndim == 2, "Inference result has to be a two dimensional array"
         assert len(res[0]) >= 2, "Inference result has to represent at least two states"
         assert len(res) == 1, "Loss class currently does not support batched calculations"
-        return torch.argmax(res) if type(res) is torch.Tensor else np.argmax(res)
+        return torch.argmax(res)
 
     def PN(self, delta: np.ndarray) -> torch.Tensor:
         """_Pertinent negative_ Loss Function
@@ -183,7 +186,7 @@ class Torch_CEMLoss(CEMLoss):
         Returns:
             torch.Tensor: negative f_K term loss value, 2D tensor of shape (bs, 1).
         """
-        pred = self.inference(self.org_img + torch.Tensor(delta))
+        pred = self.inference(self.org_img + torch.Tensor(delta, device=self.device))
         if hasattr(self, "pn_target"):
             attack_value = loss_utils.torch_extract_target_proba(
                 pred, self.target
@@ -207,7 +210,7 @@ class Torch_CEMLoss(CEMLoss):
         Returns:
             torch.Tensor: positive f_K term loss value, 2D tensor of shape (bs, 1).
         """
-        pred = self.inference(torch.Tensor(delta))
+        pred = self.inference(torch.Tensor(delta, device=self.device))
         attack_value = loss_utils.torch_extract_nontarget_proba(
             pred, self.target
         ) - loss_utils.torch_extract_target_proba(pred, self.target)
