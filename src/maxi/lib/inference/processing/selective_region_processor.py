@@ -101,7 +101,7 @@ class SelectiveRegionProcessor:
 
 
 class Torch_SelectiveRegionProcessor(SelectiveRegionProcessor):
-    def __init__(self, orig_image: np.ndarray, entity_region: EntityRect) -> None:
+    def __init__(self, orig_image: np.ndarray, entity_region: EntityRect, device: str = "cpu") -> None:
         """Selective Region Processor
 
         Description:
@@ -115,11 +115,12 @@ class Torch_SelectiveRegionProcessor(SelectiveRegionProcessor):
         Args:
             orig_image (np.ndarray): The original full-sized image.
             entity_region (EntityRect): Coordinates of the image region to be perturbed.
+            device (str, optional): Computation device. Defaults to "cpu".
         """
         import torch
 
         self.orig_img = orig_image
-        self.torch_orig_img = torch.tensor(orig_image, dtype=torch.float32, requires_grad=True)
+        self.torch_orig_img = torch.tensor(orig_image, dtype=torch.float32, requires_grad=True, device=device)
         self._target = entity_region
         self.check_sizes()
 

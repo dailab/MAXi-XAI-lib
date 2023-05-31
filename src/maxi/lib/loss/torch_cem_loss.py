@@ -73,7 +73,7 @@ class Torch_CEMLoss(CEMLoss):
             channels_first=channels_first,
         )
         if hasattr(self, "pn_target") and type(self.pn_target) is np.ndarray:
-            self.pn_target = torch.tensor(self.pn_target, dtype=torch.float32)
+            self.pn_target = torch.tensor(self.pn_target, dtype=torch.float32, device=device)
 
     def get_target_idx(self, org_img: np.ndarray) -> torch.int64:
         """Retrieves index of the originally classified class in the inference result
