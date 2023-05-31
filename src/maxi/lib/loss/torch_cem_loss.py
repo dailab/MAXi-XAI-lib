@@ -85,7 +85,7 @@ class Torch_CEMLoss(CEMLoss):
         Returns:
             int: Index of the predicted classification result
         """
-        res = self.inference(torch.Tensor(org_img, device=self.device))
+        res = self.inference(torch.tensor(org_img, device=self.device))
         assert res.ndim == 2, "Inference result has to be a two dimensional array"
         assert len(res[0]) >= 2, "Inference result has to represent at least two states"
         assert len(res) == 1, "Loss class currently does not support batched calculations"
@@ -186,7 +186,7 @@ class Torch_CEMLoss(CEMLoss):
         Returns:
             torch.Tensor: negative f_K term loss value, 2D tensor of shape (bs, 1).
         """
-        pred = self.inference(self.org_img + torch.Tensor(delta, device=self.device))
+        pred = self.inference(self.org_img + torch.tensor(delta, device=self.device))
         if hasattr(self, "pn_target"):
             attack_value = loss_utils.torch_extract_target_proba(
                 pred, self.target
@@ -210,7 +210,7 @@ class Torch_CEMLoss(CEMLoss):
         Returns:
             torch.Tensor: positive f_K term loss value, 2D tensor of shape (bs, 1).
         """
-        pred = self.inference(torch.Tensor(delta, device=self.device))
+        pred = self.inference(torch.tensor(delta, device=self.device))
         attack_value = loss_utils.torch_extract_nontarget_proba(
             pred, self.target
         ) - loss_utils.torch_extract_target_proba(pred, self.target)
