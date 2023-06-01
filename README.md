@@ -16,6 +16,7 @@ For developers, it is suggested that you take a look at the Python documentation
   - [Installation](#installation)
     - [Non-local Installation](#non-local-installation)
     - [Local Installation](#local-installation)
+    - [Installation Note](#installation-note)
   - [Components](#components)
     - [Loss Package (Explanation Models)](#loss-package-explanation-models)
     - [Inference Package](#inference-package)
@@ -81,6 +82,16 @@ poetry install
 cd *LOCATION_OF_YOUR_PACKAGE*
 poetry add --editable *PATH_TO_MAX_LIB*
 ```
+
+#### Installation Note
+
+In case you use poetry as python package manager within your project, it is recommended to set the python versions to:
+
+```
+python = ">=3.8,<3.12"
+```
+
+Otherwise, some poetry dependency resolution issues might occur.
 
 ## Components
 
