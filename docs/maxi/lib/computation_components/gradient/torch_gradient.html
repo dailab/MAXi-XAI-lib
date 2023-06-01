@@ -39,11 +39,25 @@ from ...loss.base_explanation_model import BaseExplanationModel
 
 
 class Torch_Gradient(BaseGradient):
-    def __init__(self, loss: BaseExplanationModel, *args, **kwargs):
+    def __init__(
+        self, loss: BaseExplanationModel, device: str = &#34;cpu&#34;, *args, **kwargs
+    ):
+        &#34;&#34;&#34;Torch Gradient Calculation
+
+        Args:
+            loss (BaseExplanationModel): Loss Class. Is parsed by the explanation generator.
+            device (str, optional): Computation device. Defaults to &#34;cpu&#34;.
+        &#34;&#34;&#34;
         super().__init__(loss)
+        self.device = device
 
     def __call__(self, data: np.ndarray) -&gt; np.ndarray:
-        torch_data = torch.tensor(data, dtype=torch.float32, requires_grad=True)
+        torch_data = torch.tensor(
+            data,
+            dtype=torch.float32,
+            requires_grad=True,
+            device=torch.device(self.device),
+        )
 
         loss = self.loss.get_loss(torch_data)
         loss.backward()
@@ -62,27 +76,43 @@ class Torch_Gradient(BaseGradient):
 <dl>
 <dt id="maxi.lib.computation_components.gradient.torch_gradient.Torch_Gradient"><code class="flex name class">
 <span>class <span class="ident">Torch_Gradient</span></span>
-<span>(</span><span>loss: <a title="maxi.lib.loss.base_explanation_model.BaseExplanationModel" href="../../loss/base_explanation_model.html#maxi.lib.loss.base_explanation_model.BaseExplanationModel">BaseExplanationModel</a>, *args, **kwargs)</span>
+<span>(</span><span>loss: <a title="maxi.lib.loss.base_explanation_model.BaseExplanationModel" href="../../loss/base_explanation_model.html#maxi.lib.loss.base_explanation_model.BaseExplanationModel">BaseExplanationModel</a>, device: str = 'cpu', *args, **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Helper class that provides a standard way to create an ABC using
 inheritance.</p>
-<p><strong>Abstract Class</strong>: Base Class for Gradient Calculation Methods</p>
+<p>Torch Gradient Calculation</p>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>loss</code></strong> :&ensp;<code>BaseExplanationModel</code></dt>
-<dd>Explanation method's specific class instance (loss function).</dd>
+<dd>Loss Class. Is parsed by the explanation generator.</dd>
+<dt><strong><code>device</code></strong> :&ensp;<code>str</code>, optional</dt>
+<dd>Computation device. Defaults to "cpu".</dd>
 </dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">class Torch_Gradient(BaseGradient):
-    def __init__(self, loss: BaseExplanationModel, *args, **kwargs):
+    def __init__(
+        self, loss: BaseExplanationModel, device: str = &#34;cpu&#34;, *args, **kwargs
+    ):
+        &#34;&#34;&#34;Torch Gradient Calculation
+
+        Args:
+            loss (BaseExplanationModel): Loss Class. Is parsed by the explanation generator.
+            device (str, optional): Computation device. Defaults to &#34;cpu&#34;.
+        &#34;&#34;&#34;
         super().__init__(loss)
+        self.device = device
 
     def __call__(self, data: np.ndarray) -&gt; np.ndarray:
-        torch_data = torch.tensor(data, dtype=torch.float32, requires_grad=True)
+        torch_data = torch.tensor(
+            data,
+            dtype=torch.float32,
+            requires_grad=True,
+            device=torch.device(self.device),
+        )
 
         loss = self.loss.get_loss(torch_data)
         loss.backward()

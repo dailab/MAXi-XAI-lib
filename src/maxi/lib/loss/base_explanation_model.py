@@ -23,7 +23,8 @@ class BaseExplanationModel(ABC):
 
         Description:
             The explanation models have to be implemented as a loss function. This class provides \
-            the essential interface for loss functions.
+            the essential interface for loss functions. For the loss functions compatible gradient \
+            methods need to be specified in the ```compatible_grad_methods``` attribute.
 
         Args:
             org_img (np.ndarray): Original target image in [width, height, channels].
@@ -32,8 +33,6 @@ class BaseExplanationModel(ABC):
             lower (np.ndarray): Lower bound for the object of optimization. Has to be of same shape as org_img.
             upper (np.ndarray): Lower bound for the object of optimization. Has to be of same shape as org_img.
         """
-        assert org_img.shape == lower.shape and org_img.shape == upper.shape
-
         self.org_img, self.inference = org_img, inference
         self.inference = inference
         self._x0_generator, self._lower, self._upper = x0_generator, lower, upper

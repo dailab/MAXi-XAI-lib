@@ -2,10 +2,11 @@
 
 __all__ = ["CEMLoss"]
 
-from typing import Callable, Tuple
+from typing import Callable, Union
 
 import numpy as np
 from numpy.linalg import norm
+from warnings import warn
 
 from .base_explanation_model import BaseExplanationModel
 from ..computation_components.gradient import (
@@ -19,7 +20,11 @@ from ...utils.general import to_numpy
 
 class CEMLoss(BaseExplanationModel):
     compatible_grad_methods = [URVGradientEstimator, USRVGradientEstimator]
-    pp_x0_generator, pn_x0_generator = np.zeros_like, np.zeros_like
+    # pp_x0_generator, pn_x0_generator = lambda x: x, np.zeros_like
+    pp_x0_generator, pn_x0_generator = (
+        lambda x: x,
+        loss_utils.generate_from_gaussian,
+    )
 
     def __init__(
         self,
@@ -33,6 +38,8 @@ class CEMLoss(BaseExplanationModel):
         lower: np.ndarray = None,
         upper: np.ndarray = None,
         channels_first: bool = False,
+        *args,
+        **kwargs,
     ):
         """ Loss function of the Contrastive-Explanation-Method
 
@@ -42,7 +49,7 @@ class CEMLoss(BaseExplanationModel):
 
         Args:
             mode (str): Chose between "PP" for _pertinent positive_ / "PN" for _pertinent negative_.
-            org_img (ndarray): Original image [width, height, channels]
+            org_img (ndarray): Original image [width, height, channels] or [channels, width, height].
             inference (InferenceCall): Inference method of an external prediction entity. Has to return an \
                 interpretable representation of the underlying prediction, e.g. a binary vector indicating \
                 the “presence” or “absence”.
@@ -51,16 +58,20 @@ class CEMLoss(BaseExplanationModel):
             K (float, optional): Confidence parameter for seperation between probability of target and non-target value.
             AE (Callable[[ndarray], ndarray]): Autoencoder, if None disregard AE error term.
             lower (np.ndarray, optional): Lower bound for the optimization. Has to be of the same shape as the \
-                target image.
+                target image. Defaults to None.
             upper (np.ndarray, optional): Upper bound for the optimization. Has to be of the same shape as the \
-                target image.
+                target image. Defaults to None.
             channels_first (bool, optional): Whether the channels dimension comes before the width and height \
                 dimensions as in [bs, channels, width, height].
             
+        Configurable Parameters:
+            c, gamma, K, AE, channels_first
+            
         Note:
             The hardcoded lower and upper bounds in ```_init_lower_upper()``` are tailored for images with \
-            pixel range of -0.5 to 0.5. For other ranges, it is required to specify it accordingly.\
+            pixel range of [0, 1] or [0, 255]. For other ranges, it is required to specify it accordingly.\
             Otherwise it might strongly adulterate the results.
+            
         """
         self._setup_mode(mode)
         self._init_lower_upper(lower, upper, org_img)
@@ -81,10 +92,13 @@ class CEMLoss(BaseExplanationModel):
         # channel dimension
         self._c_dim = 1 if channels_first else -1  # 1 channels first, -1 channels last
 
+        # read pn target
+        self._read_pn_target_from_kwargs(kwargs)
+
     def _init_lower_upper(
         self,
-        lower: Tuple[None, np.ndarray],
-        upper: Tuple[None, np.ndarray],
+        lower: Union[None, np.ndarray],
+        upper: Union[None, np.ndarray],
         org_img: np.ndarray,
     ):
         DEFAULT_LB_UB = {
@@ -94,16 +108,23 @@ class CEMLoss(BaseExplanationModel):
                 "upper": to_numpy(org_img),
             },
             "PN": {
-                "lower": np.full(org_img.shape, 0.0),
-                "upper": 1.0 - to_numpy(org_img),
+                "lower": np.full(org_img.shape, -1.0),
+                # "upper": 1.0 - to_numpy(org_img),
+                "upper": np.full(org_img.shape, 1.0),
             },
         }
+        DEFAULT_LB_UB["PPSMOOTH"] = DEFAULT_LB_UB["PP"]
+        DEFAULT_LB_UB["PNSMOOTH"] = DEFAULT_LB_UB["PN"]
 
         self._lower = DEFAULT_LB_UB[self.mode]["lower"] if lower is None else lower
         self._upper = DEFAULT_LB_UB[self.mode]["upper"] if upper is None else upper
 
-        assert type(self._lower) is np.ndarray, "Invalid lower bound given for optimization"
-        assert type(self._upper) is np.ndarray, "Invalid upper bound given for optimization"
+        assert (
+            type(self._lower) is np.ndarray
+        ), "Invalid lower bound given for optimization; self._lower is not a numpy array"
+        assert (
+            type(self._upper) is np.ndarray
+        ), "Invalid upper bound given for optimization; self._upper is not a numpy array"
 
         if self._lower.shape != org_img.shape:
             raise ValueError(
@@ -116,12 +137,28 @@ class CEMLoss(BaseExplanationModel):
             )
 
     def _setup_mode(self, input: str):
-        assert input.upper() in {"PP", "PN"}, "Provided unknown mode for CEM"
+        assert input.upper() in {
+            "PP",
+            "PN",
+            "PPSMOOTH",
+            "PNSMOOTH",
+        }, f"Provided unknown mode for CEM: {input}"
         self.mode = input.upper()
 
-        self.get_loss, self._x0_generator = (
-            (self.PP, CEMLoss.pp_x0_generator) if self.mode == "PP" else (self.PN, CEMLoss.pn_x0_generator)
-        )
+        if self.mode == "PP":
+            self.get_loss, self._x0_generator = (self.PP, CEMLoss.pp_x0_generator)
+        elif self.mode == "PN":
+            self.get_loss, self._x0_generator = (self.PN, CEMLoss.pn_x0_generator)
+        elif self.mode == "PPSMOOTH":
+            self.get_loss, self._x0_generator = (
+                self.PP_smooth,
+                CEMLoss.pp_x0_generator,
+            )
+        else:
+            self.get_loss, self._x0_generator = (
+                self.PN_smooth,
+                CEMLoss.pn_x0_generator,
+            )
 
     def get_target_idx(self, org_img: np.ndarray) -> int:
         """Retrieves index of the originally classified class in the inference result
@@ -133,16 +170,30 @@ class CEMLoss(BaseExplanationModel):
             int: Index of the most likely class.
         """
         res = self.inference(org_img)
-        assert res.ndim == 2, "Inference result has to be an one dimensional array"
+        assert res.ndim == 2, f"Inference result has to be an one dimensional array, is {res.ndim}"
         assert len(res[0]) >= 2, "Inference result has to represent at least two states"
-        assert len(res) == 1, "Loss class currently does not support batched calculations"
+        assert (
+            len(res) == 1
+        ), "Loss class currently does not support batched calculations"
         return np.argmax(to_numpy(res))  # index of the original prediction
 
-    def get_loss(self, data: np.ndarray) -> np.ndarray:
+    def _read_pn_target_from_kwargs(self, kwargs: dict) -> None:
+        if "pn_target" in kwargs:
+            if "PP" in self.mode:
+                warn("PN target class is given but not used in PP mode.")
+                return
+            self.pn_target = np.array([kwargs["pn_target"]])
+
+            if self.target == self.pn_target:
+                raise ValueError(
+                    f"Target class ({self.target}) and PN target class ({self.pn_target}) are the same."
+                )
+
+    def get_loss(self, data: np.ndarray, *args, **kwargs) -> np.ndarray:
         return super().get_loss(data)
 
     def PN(self, delta: np.ndarray) -> np.ndarray:
-        """_Pertinent negative_ loss function
+        """_Pertinent Negative_ Loss Function
 
         Args:
             delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
@@ -155,7 +206,7 @@ class CEMLoss(BaseExplanationModel):
         return self.c * self.f_K_neg(delta) + self.gamma * self.PN_AE_error(delta)
 
     def PP(self, delta: np.ndarray) -> np.ndarray:
-        """Pertinent Positive loss function
+        """_Pertinent Positive_ Loss Function
 
         Args:
             delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
@@ -167,6 +218,36 @@ class CEMLoss(BaseExplanationModel):
         #     delta = np.ascontiguousarray(delta.reshape(self._org_img_shape))
         return self.c * self.f_K_pos(delta) + self.gamma * self.PP_AE_error(delta)
 
+    def PP_smooth(self, delta: np.ndarray) -> np.ndarray:
+        """_Smooth Pertinent Positive_ loss function
+
+        Args:
+            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            np.ndarray: PP loss value(s), 2D array of shape (bs, 1).
+        """
+        # if delta.ndim < 2:
+        #     delta = np.ascontiguousarray(delta.reshape(self._org_img_shape))
+        return self.c * self.f_K_pos_smooth(delta) + self.gamma * self.PP_AE_error(
+            delta
+        )
+
+    def PN_smooth(self, delta: np.ndarray) -> np.ndarray:
+        """_Smooth Pertinent Negative_ Loss Function
+
+        Args:
+            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            np.ndarray: PN loss value(s), 2D array of shape (bs, 1).
+        """
+        # if delta.ndim < 2:
+        #     delta = np.ascontiguousarray(delta.reshape(self._org_img_shape))
+        return self.c * self.f_K_neg_smooth(delta) + self.gamma * self.PN_AE_error(
+            delta
+        )
+
     def f_K_neg(self, delta: np.ndarray) -> np.ndarray:
         """f_K term for the pertinent negative
 
@@ -177,10 +258,19 @@ class CEMLoss(BaseExplanationModel):
             np.ndarray: negative f_K term loss value, 2D array of shape (bs, 1).
         """
         pred = self.inference(self.org_img + delta)
-        return np.maximum(
-            loss_utils.np_extract_target_proba(pred, self.target)
-            - loss_utils.np_extract_nontarget_proba(pred, self.target),
-            -self.K,
+
+        return (
+            np.maximum(
+                loss_utils.np_extract_target_proba(pred, self.target)
+                - loss_utils.np_extract_target_proba(pred, self.pn_target),
+                -self.K,
+            )
+            if hasattr(self, "pn_target")
+            else np.maximum(
+                loss_utils.np_extract_target_proba(pred, self.target)
+                - loss_utils.np_extract_nontarget_proba(pred, self.target),
+                -self.K,
+            )
         )
 
     def f_K_pos(self, delta: np.ndarray) -> np.ndarray:
@@ -198,6 +288,51 @@ class CEMLoss(BaseExplanationModel):
             - loss_utils.np_extract_target_proba(pred, self.target),
             -self.K,
         )
+
+    def f_K_neg_smooth(self, delta: np.ndarray) -> np.ndarray:
+        """Smooth f_K term for the pertinent negative
+
+        Args:
+            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            np.ndarray: negative f_K term loss value, 2D array of shape (bs, 1).
+        """
+        pred = self.inference(self.org_img + delta)
+
+        if not hasattr(self, "pn_target"):
+            attack_value = loss_utils.np_extract_target_proba(
+                pred, self.target
+            ) - loss_utils.np_extract_nontarget_proba(pred, self.target)
+        else:
+            # difference between value of originally predicted class and value of pn_target class
+            attack_value = loss_utils.np_extract_target_proba(
+                pred, self.target
+            ) - loss_utils.np_extract_target_proba(pred, self.pn_target)
+
+        if attack_value < -10:
+            return np.log(1.0 + np.exp(attack_value))
+        else:
+            return attack_value + np.log(1.0 + np.exp(-attack_value))
+
+    def f_K_pos_smooth(self, delta: np.ndarray) -> np.ndarray:
+        """Smooth f_K term for the smooth pertinent positive
+
+        Args:
+            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            np.ndarray: positive f_K term loss value, 2D array of shape (bs, 1).
+        """
+        pred = self.inference(delta)
+        attack_value = loss_utils.np_extract_nontarget_proba(
+            pred, self.target
+        ) - loss_utils.np_extract_target_proba(pred, self.target)
+
+        if attack_value < -10:
+            return np.log(1.0 + np.exp(attack_value))
+        else:
+            return attack_value + np.log(1.0 + np.exp(-attack_value))
 
     def PN_AE_error(self, delta: np.ndarray) -> np.ndarray:
         """Autoencoder error term for the Pertinent Negative

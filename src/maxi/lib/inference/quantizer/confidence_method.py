@@ -4,10 +4,10 @@ from typing import Callable
 import numpy as np
 import torch
 
-from .base_quantizer import BaseQuantizer
 from ....data.data_types import Processor
 from ....utils import quantizer_utils
 from ....utils.general import to_numpy
+from .base_quantizer import BaseQuantizer
 
 
 class BinaryConfidenceMethod(BaseQuantizer):
@@ -63,6 +63,7 @@ class TorchBinaryConfidenceMethod(BinaryConfidenceMethod):
         self,
         preprocess: Processor = quantizer_utils.identity,
         confidence_calculator: Callable[[np.ndarray], float] = quantizer_utils.calculate_confidence,
+        device: str = "cpu",
     ) -> None:
         """Binary Confidence Quantizer Method
 
@@ -81,10 +82,11 @@ class TorchBinaryConfidenceMethod(BinaryConfidenceMethod):
             confidence_calculator (Callable[[np.ndarray], float], optional): Method to calculate the confidence. 
                 Has to reduce the (preprocessed) prediction to a single value (1,). 
                 Defaults to calculate_confidence.
+            device (str, optional): Computation device. Defaults to "cpu".
         """
         super().__init__(preprocess)
         self.confidence_calculator = confidence_calculator
-        self._tensor = torch.tensor([[-1.0, 1.0]], requires_grad=True)
+        self._tensor = torch.tensor([[-1.0, 1.0]], requires_grad=True, device=device)
 
     def __call__(self, prediction: np.ndarray, *args, **kwargs) -> np.ndarray:
         """Performs the quantization

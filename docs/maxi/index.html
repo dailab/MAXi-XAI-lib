@@ -28,7 +28,17 @@
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">&#34;&#34;&#34;Model-Agnostic Explanation Library (MAX Lib)&#34;&#34;&#34;
-from .lib import *
+from .lib import (
+    AsyncExplanationWrapper,
+    ExplanationGenerator,
+    gradient,
+    loss,
+    optimizer,
+    inference,
+    image_segmentation,
+)
+from .lib.image_segmentation import *
+import maxi.utils.loss_utils as loss_utils
 import maxi.data.data_types as data_types</code></pre>
 </details>
 </section>

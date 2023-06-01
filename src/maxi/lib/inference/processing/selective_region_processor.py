@@ -28,7 +28,7 @@ class SelectiveRegionProcessor:
     def check_sizes(self):
         assert (
             self.orig_img.shape[0] >= self.target["w"] and self.orig_img.shape[1] >= self.target["h"]
-        ), "Target region has a dimension which is larger than of the original image"
+        ), f"Target region has a dimension which is larger than of the original image; {self.orig_img.shape[0:2]} < {(self.target['w'], self.target['h'])}"
 
     @property
     def target(self) -> None:
@@ -59,7 +59,7 @@ class SelectiveRegionProcessor:
     def batched_replacement(self, new_region: np.ndarray) -> np.ndarray:
         assert (
             new_region.shape[1] == self.target["w"] and new_region.shape[2] == self.target["h"]
-        ), "Parsed region is of different size compared to the target region"
+        ), f"Parsed region is of different size compared to the target region; {new_region.shape[1:3]} != {(self.target['w'], self.target['h'])}"
 
         tmp_image = np.stack([self.orig_img.copy() for _ in range(new_region.shape[0])], axis=0)
         tmp_image[
@@ -72,7 +72,7 @@ class SelectiveRegionProcessor:
     def nonbatched_replacement(self, new_region: np.ndarray) -> np.ndarray:
         assert (
             new_region.shape[0] == self.target["w"] and new_region.shape[1] == self.target["h"]
-        ), "Parsed region is of different size compared to the target region"
+        ), f"Parsed region is of different size compared to the target region; {new_region.shape[0:2]} != {(self.target['w'], self.target['h'])}"
 
         tmp_image = self.orig_img.copy()
         tmp_image[
@@ -92,7 +92,7 @@ class SelectiveRegionProcessor:
         """
         assert (
             segmentation_mask.shape[1:] == self.orig_img.shape[:2]
-        ), "Segmentation mask must be of the same shape as the original image"
+        ), f"Segmentation mask must be of the same shape as the original image; is {segmentation_mask.shape[1:]} != {self.orig_img.shape[:2]}"
         return segmentation_mask[
             :,
             self.target["x"] : self.target["x"] + self.target["w"],
@@ -101,7 +101,7 @@ class SelectiveRegionProcessor:
 
 
 class Torch_SelectiveRegionProcessor(SelectiveRegionProcessor):
-    def __init__(self, orig_image: np.ndarray, entity_region: EntityRect) -> None:
+    def __init__(self, orig_image: np.ndarray, entity_region: EntityRect, device: str = "cpu") -> None:
         """Selective Region Processor
 
         Description:
@@ -115,11 +115,12 @@ class Torch_SelectiveRegionProcessor(SelectiveRegionProcessor):
         Args:
             orig_image (np.ndarray): The original full-sized image.
             entity_region (EntityRect): Coordinates of the image region to be perturbed.
+            device (str, optional): Computation device. Defaults to "cpu".
         """
         import torch
 
         self.orig_img = orig_image
-        self.torch_orig_img = torch.tensor(orig_image, dtype=torch.float32, requires_grad=True)
+        self.torch_orig_img = torch.tensor(orig_image, dtype=torch.float32, requires_grad=True, device=device)
         self._target = entity_region
         self.check_sizes()
 
@@ -138,15 +139,23 @@ class Torch_SelectiveRegionProcessor(SelectiveRegionProcessor):
         """
         assert (
             new_region.shape[0] == self.target["w"] and new_region.shape[1] == self.target["h"]
-        ), "Parsed region is of different size compared to the target region"
-
-        tmp_image = (
-            torch.autograd.Variable(self.torch_orig_img.clone(), requires_grad=True)
-            if type(new_region) is torch.Tensor
-            else self.orig_img.copy()
+        ), f"Parsed region is of different size compared to the target region; {new_region.shape[0:2]} != {(self.target['w'], self.target['h'])}"
+        tmp_image = torch.cat(
+            (
+                self.torch_orig_img[: self.target["x"], self.target["y"] : self.target["y"] + self.target["h"], :],
+                new_region,
+                self.torch_orig_img[
+                    self.target["x"] + self.target["w"] :, self.target["y"] : self.target["y"] + self.target["h"], :
+                ],
+            ),
+            dim=0,
         )
-        tmp_image[
-            self.target["x"] : self.target["x"] + self.target["w"],
-            self.target["y"] : self.target["y"] + self.target["h"],
-        ] = new_region
-        return tmp_image
+        tmp_image = torch.cat(
+            (
+                self.torch_orig_img[:, : self.target["y"], :],
+                tmp_image,
+                self.torch_orig_img[:, self.target["y"] + self.target["h"] :, :],
+            ),
+            dim=1,
+        )
+        return tmp_image.view((self.orig_img.shape[2], self.orig_img.shape[0], self.orig_img.shape[1]))

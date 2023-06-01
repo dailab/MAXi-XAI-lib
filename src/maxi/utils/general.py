@@ -8,7 +8,9 @@ from pathlib import Path
 
 def colorstr(*input):
     # Colors a string https://en.wikipedia.org/wiki/ANSI_escape_code, i.e.  colorstr('blue', 'hello world')
-    *args, string = input if len(input) > 1 else ("blue", "bold", input[0])  # color arguments, string
+    *args, string = (
+        input if len(input) > 1 else ("blue", "bold", input[0])
+    )  # color arguments, string
     colors = {
         "black": "\033[30m",  # basic colors
         "red": "\033[31m",
@@ -43,7 +45,11 @@ def check_requirements(requirements="requirements.txt", exclude=()):
         if not file.exists():
             print(f"{prefix} {file.resolve()} not found, check failed.")
             return
-        requirements = [f"{x.name}{x.specifier}" for x in pkg.parse_requirements(file.open()) if x.name not in exclude]
+        requirements = [
+            f"{x.name}{x.specifier}"
+            for x in pkg.parse_requirements(file.open())
+            if x.name not in exclude
+        ]
     else:  # list or tuple of packages
         requirements = [x for x in requirements if x not in exclude]
 
@@ -53,7 +59,9 @@ def check_requirements(requirements="requirements.txt", exclude=()):
             pkg.require(r)
         except Exception as e:  # DistributionNotFound or VersionConflict if requirements not met
             n += 1
-            print(f"{prefix} {r} not found and is required by pancake, attempting auto-update...")
+            print(
+                f"{prefix} {r} not found and is required by pancake, attempting auto-update..."
+            )
             print(subprocess.check_output(f"pip install '{r}'", shell=True).decode())
 
     if n:  # if packages updated
@@ -65,7 +73,10 @@ def check_requirements(requirements="requirements.txt", exclude=()):
 
 
 def increment_path(
-    path: Union[str, Path] = Path("/xai/run"), exist_ok: bool = False, sep: str = "_", mkdir: bool = True
+    path: Union[str, Path] = Path("/xai/run"),
+    exist_ok: bool = False,
+    sep: str = "_",
+    mkdir: bool = True,
 ) -> Path:
     # Increment file or directory path, i.e. runs/exp --> runs/exp{sep}2, runs/exp{sep}3, ... etc.
     path = Path(path)  # os-agnostic
@@ -93,14 +104,24 @@ import torch
 
 
 def to_numpy(data: Union[np.ndarray, tf.Tensor, torch.Tensor]) -> np.ndarray:
-    if type(data) in [np.ndarray, np.float32, np.float64, np.int32, np.int64, float, int]:
+    if type(data) in [
+        np.ndarray,
+        np.float32,
+        np.float64,
+        np.int32,
+        np.int64,
+        float,
+        int,
+    ]:
         return data
     elif type(data) is tf.Tensor:
         return data.numpy()
     elif type(data) is torch.Tensor:
-        return data.detach().numpy()
+        return data.cpu().detach().numpy()
     else:
         try:
             return data.numpy()
         except Exception as e:
-            raise ValueError(f"Cannot convert data of type '{type(data)}' to a numpy array.") from e
+            raise ValueError(
+                f"Cannot convert data of type '{type(data)}' to a numpy array."
+            ) from e

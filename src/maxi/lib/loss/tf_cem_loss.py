@@ -17,12 +17,14 @@ class TF_CEMLoss(CEMLoss):
         org_img: np.ndarray,
         inference: InferenceCall,
         gamma: float,
-        K: float,
+        K: float = 1.0,
         c: float = 1.0,
         AE: Callable[[np.ndarray], np.ndarray] = None,
         lower: np.ndarray = None,
         upper: np.ndarray = None,
         channels_first: bool = False,
+        *args,
+        **kwargs,
     ) -> None:
         """ TensoFlow Loss function of the Contrastive-Explanation-Method
 
@@ -46,7 +48,10 @@ class TF_CEMLoss(CEMLoss):
                 target image.
             channels_first (bool, optional): Whether the channels dimension comes before the width and height \
                 dimensions as in [bs, channels, width, height].
-            
+        
+        Configurable Parameters:
+            c, gamma, K, AE, channels_first
+        
         Note:
             The loss functions are implemented solely using derivable TensorFlow methods. In order to use \
             TF's automatic differentiation on this class' methods, the model must be implemented in TF as well.
@@ -63,8 +68,11 @@ class TF_CEMLoss(CEMLoss):
             lower=lower,
             upper=upper,
             channels_first=channels_first,
+            **kwargs,
         )
-        self._org_img_shape = tf.constant(org_img.shape)
+        # self._org_img_shape = tf.constant(org_img.shape)
+        if hasattr(self, "pn_target") and type(self.pn_target) != tf.Tensor:
+            self.pn_target = tf.convert_to_tensor(self.pn_target, dtype=tf.int32)
 
     def get_target_idx(self, org_img: tf.Tensor) -> tf.int32:
         """Retrieves index of the originally classified class in the inference result
@@ -78,11 +86,13 @@ class TF_CEMLoss(CEMLoss):
         res = self.inference(org_img)
         assert res.ndim == 2, "Inference result has to be a two dimensional array"
         assert len(res[0]) >= 2, "Inference result has to represent at least two states"
-        assert len(res) == 1, "Loss class currently does not support batched calculations"
+        assert (
+            len(res) == 1
+        ), "Loss class currently does not support batched calculations"
         return tf.cast(tf.argmax(res, axis=-1), tf.int32)
 
     def PN(self, delta: np.ndarray) -> tf.Tensor:
-        """_Pertinent negative_ loss function
+        """_Pertinent Negative_ Loss Function
 
         Args:
             delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
@@ -94,10 +104,10 @@ class TF_CEMLoss(CEMLoss):
         #     delta = tf.reshape(delta, self._org_img_shape)
         if delta.dtype.name != "float32":
             delta = tf.cast(delta, tf.float32)
-        return self.c * self.f_K_neg(delta) + self.gamma * self.PN_AE_error(delta)
+        return super().PN(delta)
 
     def PP(self, delta: np.ndarray) -> tf.Tensor:
-        """Pertinent Positive loss function
+        """_Pertinent Positive_ loss function
 
         Args:
             delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
@@ -109,7 +119,37 @@ class TF_CEMLoss(CEMLoss):
         #     delta = tf.reshape(delta, self._org_img_shape)
         if delta.dtype.name != "float32":
             delta = tf.cast(delta, tf.float32)
-        return self.c * self.f_K_pos(delta) + self.gamma * self.PP_AE_error(delta)
+        return super().PP(delta)
+
+    def PN_smooth(self, delta: np.ndarray) -> tf.Tensor:
+        """_Smooth Pertinent Negative_ Loss Function
+
+        Args:
+            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            tf.Tensor: PN loss value(s), 2D tensor of shape (bs, 1).
+        """
+        # if delta.ndim < 2:
+        #     delta = tf.reshape(delta, self._org_img_shape)
+        if delta.dtype.name != "float32":
+            delta = tf.cast(delta, tf.float32)
+        return super().PN_smooth(delta)
+
+    def PP_smooth(self, delta: np.ndarray) -> tf.Tensor:
+        """_Smooth Pertinent Positive_ Loss Function
+
+        Args:
+            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            tf.Tensor: PP loss value(s), 2D tensor of shape (bs, 1).
+        """
+        # if delta.ndim < 2:
+        #     delta = tf.reshape(delta, self._org_img_shape)
+        if delta.dtype.name != "float32":
+            delta = tf.cast(delta, tf.float32)
+        return super().PP_smooth(delta)
 
     def f_K_neg(self, delta: tf.Tensor) -> tf.Tensor:
         """f_K term for the pertinent negative
@@ -121,11 +161,19 @@ class TF_CEMLoss(CEMLoss):
             tf.Tensor: negative f_K term loss value, 2D tensor of shape (bs, 1).
         """
         pred = self.inference(self.org_img + delta)
-        return tf.maximum(
-            loss_utils.tf_extract_target_proba(pred, self.target)
-            - loss_utils.tf_extract_nontarget_proba(pred, self.target),
-            -self.K,
-        )
+        if not hasattr(self, "pn_target"):
+            attack_value = tf.maximum(
+                loss_utils.tf_extract_target_proba(pred, self.target)
+                - loss_utils.tf_extract_nontarget_proba(pred, self.target),
+                -self.K,
+            )
+        else:
+            attack_value = tf.maximum(
+                loss_utils.tf_extract_target_proba(pred, self.target)
+                - loss_utils.tf_extract_target_proba(pred, self.pn_target),
+                -self.K,
+            )
+        return attack_value
 
     def f_K_pos(self, delta: tf.Tensor) -> tf.Tensor:
         """f_K term for the pertinent positive
@@ -143,6 +191,50 @@ class TF_CEMLoss(CEMLoss):
             -self.K,
         )
 
+    def f_K_neg_smooth(self, delta: tf.Tensor) -> tf.Tensor:
+        """Smooth f_K term for the pertinent negative
+
+        Args:
+            delta (tf.Tensor): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            tf.Tensor: negative f_K term loss value, 2D tensor of shape (bs, 1).
+        """
+        pred = self.inference(self.org_img + delta)
+
+        if not hasattr(self, "pn_target"):
+            attack_value = loss_utils.tf_extract_target_proba(
+                pred, self.target
+            ) - loss_utils.tf_extract_nontarget_proba(pred, self.target)
+        else:
+            attack_value = loss_utils.tf_extract_target_proba(
+                pred, self.target
+            ) - loss_utils.tf_extract_target_proba(pred, self.pn_target)
+
+        if attack_value < -10:
+            return tf.math.log(1.0 + tf.math.exp(attack_value))
+        else:
+            return attack_value + tf.math.log(1.0 + tf.math.exp(-attack_value))
+
+    def f_K_pos_smooth(self, delta: tf.Tensor) -> tf.Tensor:
+        """Smooth f_K term for the pertinent positive
+
+        Args:
+            delta (tf.Tensor): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+
+        Returns:
+            tf.Tensor: positive f_K term loss value, 2D tensor of shape (bs, 1).
+        """
+        pred = self.inference(delta)
+        attack_value = loss_utils.tf_extract_nontarget_proba(
+            pred, self.target
+        ) - loss_utils.tf_extract_target_proba(pred, self.target)
+
+        if attack_value < -10:
+            return tf.math.log(1.0 + tf.math.exp(attack_value))
+        else:
+            return attack_value + tf.math.log(1.0 + tf.math.exp(-attack_value))
+
     def PN_AE_error(self, delta: tf.Tensor) -> tf.Tensor:
         """Autoencoder error term for the pertinent negative
 
@@ -155,7 +247,12 @@ class TF_CEMLoss(CEMLoss):
         if not self.AE:
             return 0.0
         adv_img = self.org_img + delta
-        return tf.norm(tf.norm(adv_img - self.AE(adv_img), axis=self._c_dim), axis=[-2, -1]) ** 2
+        return (
+            tf.norm(
+                tf.norm(adv_img - self.AE(adv_img), axis=self._c_dim), axis=[-2, -1]
+            )
+            ** 2
+        )
 
     def PP_AE_error(self, delta: tf.Tensor) -> tf.Tensor:
         """Autoencoder error term for the pertinent positive
@@ -168,4 +265,7 @@ class TF_CEMLoss(CEMLoss):
         """
         if not self.AE:
             return 0.0
-        return tf.norm(tf.norm(delta - self.AE(delta), axis=self._c_dim), axis=[-2, -1]) ** 2
+        return (
+            tf.norm(tf.norm(delta - self.AE(delta), axis=self._c_dim), axis=[-2, -1])
+            ** 2
+        )

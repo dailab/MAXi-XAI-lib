@@ -62,14 +62,26 @@ def setup_logging(log: logging.Logger, log_level: str):
     log.debug(f&#34;Log level set to {log_level}.&#34;)
 
 
+import numpy as np
 def _callback(res: OptimizeResult) -&gt; None:
+    # print(
+    #     &#34;iteration: &#34;,
+    #     res.nit,
+    #     &#34; overall loss: &#34;,
+    #     res.func,
+    #     &#34; attack loss: &#34;,
+    #     res.loss,
+    #     &#34; l1: &#34;,
+    #     res.l1,
+    #     &#34; l2: &#34;,
+    #     res.l2,
+    # )
+    loss = res.func if type(res.func) is not np.ndarray else res.func[0]
+    attack_loss = res.loss if type(res.func) is not np.ndarray else res.loss[0]
     print(
-        &#34;iteration: &#34;,
-        res.nit,
-        &#34; loss: &#34;,
-        res.func,
-        &#34; l1: &#34;,
-        np.linalg.norm(res.x.flatten(), ord=1),
+        &#34;iteration: {:6} || overall_loss: {:10.4f} | attack_loss: {:6.4f} | l1: {:8.6f} | l2: {:8.6f}&#34;.format(
+            res.nit, loss, attack_loss, res.l1, res.l2
+        )
     )</code></pre>
 </details>
 </section>

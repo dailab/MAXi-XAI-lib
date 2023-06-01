@@ -6,7 +6,8 @@ For developers, it is suggested that you take a look at the Python documentation
 
 **Currently implemented explanation methods**:
 
-- “[_Explanations based on the Missing: Towards Contrastive Explanations with Pertinent Negatives_](https://arxiv.org/abs/1802.07623)”
+- CEM: “[_Explanations based on the Missing: Towards Contrastive Explanations with Pertinent Negatives_](https://arxiv.org/abs/1802.07623)”
+- LIME: “[_"Why Should I Trust You?": Explaining the Predictions of Any Classifier_](https://arxiv.org/abs/1602.04938)”
 
 ## Table of Contents
 
@@ -27,17 +28,10 @@ For developers, it is suggested that you take a look at the Python documentation
   - [API Documentation](#api-documentation)
   - [Tutorials](#tutorials)
     - [General Tutorials](#general-tutorials)
-      - [Minimal Effort Example with CEM on MNIST](#minimal-effort-example-with-cem-on-mnist)
-        - [Extension: Example _AsyncExplanationWrapper_ Usage](#extension-example-asyncexplanationwrapper-usage)
-      - [l1-, l2- and kappa- Influence on Explanations](#l1--l2--and-kappa--influence-on-explanations)
     - [Computation Component Tutorials](#computation-component-tutorials)
-      - [Example: _Optimizer_ Implementation](#example-optimizer-implementation)
-      - [Example: _Gradient Calculation Method_ Implementation](#example-gradient-calculation-method-implementation)
     - [Inference Component Tutorials](#inference-component-tutorials)
-      - [Example: _Quantizer_ Implementation](#example-quantizer-implementation)
-      - [Example: _Inference Wrapper_ Usage](#example-inference-wrapper-usage)
     - [Explanation Model Tutorials](#explanation-model-tutorials)
-      - [Example: _Explanation Model (Loss Function)_ Implementation](#example-explanation-model-loss-function-implementation)
+- [This open source project is funded by the German Federal Ministry for Economic Affairs and Climate Action as part of the EMPAIA project under Grant Agreement No. 01MK20002C.](#this-open-source-project-is-funded-by-the-german-federal-ministry-for-economic-affairs-and-climate-action-as-part-of-the-empaia-project-under-grant-agreement-no-01mk20002c)
 
 ## Installation
 
@@ -107,8 +101,7 @@ For every entity, there exists a base class that has to be inhereted from. That 
 - Incorporates external inference model - is called for its calculations
 
 Currently implemented:
-
-- [Contrastive-Explanation-Method (PP and PN)](https://arxiv.org/abs/1802.07623)
+[Click here](https://tuananhroman.github.io/empaia_max_pydoc/lib/loss/index.html)
 
 ### Inference Package
 
@@ -173,44 +166,35 @@ The Explanation Generator interconnects all the above mentioned components and i
 
 ### General Tutorials
 
-#### Minimal Effort Example with CEM on MNIST
+- [Minimal Effort Example with CEM on MNIST](docs/md/tutorials/minimal_effort_mnist.md)
 
-[Click here](docs/md/tutorials/minimal_effort_mnist.md)
+  - [Extension: Example `AsyncExplanationWrapper` Usage](docs/md/tutorials/async_explanation_example.md)
 
-##### Extension: Example _AsyncExplanationWrapper_ Usage
-
-[Click here](docs/md/tutorials/async_explanation_example.md)
-
-#### l1-, l2- and kappa- Influence on Explanations
-
-[Click here](./docs/md/tutorials/l1_l2_kappa_influence.md)
+- [CEM PP/PN-Smooth Demonstration](docs/md/tutorials/cem_pp_pn_smooth_example.md)
+- [l1-, l2- and kappa- Influence on Explanations](./docs/md/tutorials/l1_l2_kappa_influence.md)
+- [Introduction & Tutorial to the `SegmentationHandler`](experiments/notebooks/intro_tut_segmentationhandler.ipynb)
 
 ### Computation Component Tutorials
 
-#### Example: _Optimizer_ Implementation
+- [`Optimizer` Implementation](docs/md/tutorials/optimizer_example.md)
 
-[Click here](docs/md/tutorials/optimizer_example.md)
-
-#### Example: _Gradient Calculation Method_ Implementation
-
-[Click here](docs/md/tutorials/gradient_example.md)
+- [`Gradient Calculation Method` Implementation](docs/md/tutorials/gradient_example.md)
 
 ### Inference Component Tutorials
 
-#### Example: _Quantizer_ Implementation
+- [`Quantizer` Implementation](docs/md/tutorials/quantizer_example.md)
 
-[Click here](docs/md/tutorials/quantizer_example.md)
-
-#### Example: _Inference Wrapper_ Usage
-
-[Click here](docs/md/tutorials/inference_wrapper_example.md)
+- [`Inference Wrapper` Usage](docs/md/tutorials/inference_wrapper_example.md)
 
 ### Explanation Model Tutorials
 
-#### Example: _Explanation Model (Loss Function)_ Implementation
-
-[Click here](docs/md/tutorials/explanation_model_example.md)
+- [`Explanation Model` (_Loss Function_) Implementation](docs/md/tutorials/explanation_model_example.md)
 
 <!-- ![Activity Diagram](docs/img/mael_activity_diagram.png) -->
 
+<<<<<<< HEAD
 This open source project is funded by the German Federal Ministry for Economic Affairs and Climate Action as part of the EMPAIA project under Grant Agreement No. 01MK20002C.
+=======
+This open source project is funded by the German Federal Ministry for Economic Affairs and Climate Action as part of the [EMPAIA project](https://www.empaia.org) under Grant Agreement No. 01MK20002C.
+
+> > > > > > > 45671eef0bfd258db2b543c52a7fe2feec5436b6

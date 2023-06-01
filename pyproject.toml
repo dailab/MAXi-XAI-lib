@@ -1,29 +1,30 @@
 [tool.poetry]
 name = "maxi"
-version = "0.4.0"
+version = "0.4.5"
 description = "Model-Agnostic Explanation Library"
 authors = ["Tuan Anh, Le <tuananh.le@dai-labor.de>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = ">=3.7.1,<3.10"
-tensorflow-gpu = "^2.4.0"
+python = ">=3.8,<3.12"
 easydict = "^1.9"
-pyyaml = "^5.4.0"
+pyyaml = "^6.0"
 matplotlib = "^3.4.2"
 numba = "0.50.0"
 opencv-python = "^4.5.4"
 scikit-image = "^0.18.3"
-mnist_tf = {path = "experiments/mnist", develop = true}
-torch = "^1.8.0"
+torch = "^2.0.1"
 numpy = "^1.19.0"
 nptyping = "^1.4.4"
-torchvision = "^0.11.3"
+torchvision = "^0.15.2"
+tensorflow = "^2.12.0"
 
 [tool.poetry.dev-dependencies]
 black = "^21.11b1"
 pdoc3 = "^0.10.0"
-jupyter = ""
+jupyter = "^1.0.0"
+ipython = "<8.13.0"
+
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

@@ -136,11 +136,30 @@ for explanation.</p>
             the parsed one in &#39;new_region&#39; and returns the resulting image.
 
         Args:
-            new_region (np.ndarray): The new region to be infered. Shape in [self.w, self.h, c].
+            new_region (np.ndarray): The new region to be infered. Shape in [bs, self.w, self.h, c].
 
         Returns:
-            np.ndarray: Full-sized image with &#39;new_region&#39; at [self.x, self.y] (upper-left).
+            np.ndarray: Batch of full-sized images with &#39;new_region&#39; at [self.x, self.y] (upper-left).
         &#34;&#34;&#34;
+        if new_region.ndim &lt; 4:
+            return self.nonbatched_replacement(new_region)
+        else:
+            return self.batched_replacement(new_region)
+
+    def batched_replacement(self, new_region: np.ndarray) -&gt; np.ndarray:
+        assert (
+            new_region.shape[1] == self.target[&#34;w&#34;] and new_region.shape[2] == self.target[&#34;h&#34;]
+        ), &#34;Parsed region is of different size compared to the target region&#34;
+
+        tmp_image = np.stack([self.orig_img.copy() for _ in range(new_region.shape[0])], axis=0)
+        tmp_image[
+            :,
+            self.target[&#34;x&#34;] : self.target[&#34;x&#34;] + self.target[&#34;w&#34;],
+            self.target[&#34;y&#34;] : self.target[&#34;y&#34;] + self.target[&#34;h&#34;],
+        ] = new_region
+        return tmp_image
+
+    def nonbatched_replacement(self, new_region: np.ndarray) -&gt; np.ndarray:
         assert (
             new_region.shape[0] == self.target[&#34;w&#34;] and new_region.shape[1] == self.target[&#34;h&#34;]
         ), &#34;Parsed region is of different size compared to the target region&#34;
@@ -155,16 +174,17 @@ for explanation.</p>
     def postprocess(self, segmentation_mask: np.ndarray) -&gt; np.ndarray:
         &#34;&#34;&#34;Extracts the region of the segmentation mask corresponding to the target region.
 
-        Args:
+        Args:^
             segmentation_mask (np.ndarray): The prediction mask, has to be of the same shape as ``self.orig_img``.
 
         Returns:
             np.ndarray: Segmentation mask of the target region. Shape in [self.w, self.h].
         &#34;&#34;&#34;
         assert (
-            segmentation_mask.shape[:2] == self.orig_img.shape[:2]
+            segmentation_mask.shape[1:] == self.orig_img.shape[:2]
         ), &#34;Segmentation mask must be of the same shape as the original image&#34;
         return segmentation_mask[
+            :,
             self.target[&#34;x&#34;] : self.target[&#34;x&#34;] + self.target[&#34;w&#34;],
             self.target[&#34;y&#34;] : self.target[&#34;y&#34;] + self.target[&#34;h&#34;],
         ]</code></pre>
@@ -190,6 +210,29 @@ def target(self) -&gt; None:
 </dl>
 <h3>Methods</h3>
 <dl>
+<dt id="maxi.lib.inference.processing.SelectiveRegionProcessor.batched_replacement"><code class="name flex">
+<span>def <span class="ident">batched_replacement</span></span>(<span>self, new_region: numpy.ndarray) ‑> numpy.ndarray</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def batched_replacement(self, new_region: np.ndarray) -&gt; np.ndarray:
+    assert (
+        new_region.shape[1] == self.target[&#34;w&#34;] and new_region.shape[2] == self.target[&#34;h&#34;]
+    ), &#34;Parsed region is of different size compared to the target region&#34;
+
+    tmp_image = np.stack([self.orig_img.copy() for _ in range(new_region.shape[0])], axis=0)
+    tmp_image[
+        :,
+        self.target[&#34;x&#34;] : self.target[&#34;x&#34;] + self.target[&#34;w&#34;],
+        self.target[&#34;y&#34;] : self.target[&#34;y&#34;] + self.target[&#34;h&#34;],
+    ] = new_region
+    return tmp_image</code></pre>
+</details>
+</dd>
 <dt id="maxi.lib.inference.processing.SelectiveRegionProcessor.check_sizes"><code class="name flex">
 <span>def <span class="ident">check_sizes</span></span>(<span>self)</span>
 </code></dt>
@@ -205,16 +248,35 @@ def target(self) -&gt; None:
     ), &#34;Target region has a dimension which is larger than of the original image&#34;</code></pre>
 </details>
 </dd>
+<dt id="maxi.lib.inference.processing.SelectiveRegionProcessor.nonbatched_replacement"><code class="name flex">
+<span>def <span class="ident">nonbatched_replacement</span></span>(<span>self, new_region: numpy.ndarray) ‑> numpy.ndarray</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def nonbatched_replacement(self, new_region: np.ndarray) -&gt; np.ndarray:
+    assert (
+        new_region.shape[0] == self.target[&#34;w&#34;] and new_region.shape[1] == self.target[&#34;h&#34;]
+    ), &#34;Parsed region is of different size compared to the target region&#34;
+
+    tmp_image = self.orig_img.copy()
+    tmp_image[
+        self.target[&#34;x&#34;] : self.target[&#34;x&#34;] + self.target[&#34;w&#34;],
+        self.target[&#34;y&#34;] : self.target[&#34;y&#34;] + self.target[&#34;h&#34;],
+    ] = new_region
+    return tmp_image</code></pre>
+</details>
+</dd>
 <dt id="maxi.lib.inference.processing.SelectiveRegionProcessor.postprocess"><code class="name flex">
 <span>def <span class="ident">postprocess</span></span>(<span>self, segmentation_mask: numpy.ndarray) ‑> numpy.ndarray</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Extracts the region of the segmentation mask corresponding to the target region.</p>
-<h2 id="args">Args</h2>
-<dl>
-<dt><strong><code>segmentation_mask</code></strong> :&ensp;<code>np.ndarray</code></dt>
-<dd>The prediction mask, has to be of the same shape as <code>self.orig_img</code>.</dd>
-</dl>
+<p>Args:^
+segmentation_mask (np.ndarray): The prediction mask, has to be of the same shape as <code>self.orig_img</code>.</p>
 <h2 id="returns">Returns</h2>
 <dl>
 <dt><code>np.ndarray</code></dt>
@@ -227,16 +289,17 @@ def target(self) -&gt; None:
 <pre><code class="python">def postprocess(self, segmentation_mask: np.ndarray) -&gt; np.ndarray:
     &#34;&#34;&#34;Extracts the region of the segmentation mask corresponding to the target region.
 
-    Args:
+    Args:^
         segmentation_mask (np.ndarray): The prediction mask, has to be of the same shape as ``self.orig_img``.
 
     Returns:
         np.ndarray: Segmentation mask of the target region. Shape in [self.w, self.h].
     &#34;&#34;&#34;
     assert (
-        segmentation_mask.shape[:2] == self.orig_img.shape[:2]
+        segmentation_mask.shape[1:] == self.orig_img.shape[:2]
     ), &#34;Segmentation mask must be of the same shape as the original image&#34;
     return segmentation_mask[
+        :,
         self.target[&#34;x&#34;] : self.target[&#34;x&#34;] + self.target[&#34;w&#34;],
         self.target[&#34;y&#34;] : self.target[&#34;y&#34;] + self.target[&#34;h&#34;],
     ]</code></pre>
@@ -253,12 +316,12 @@ the parsed one in 'new_region' and returns the resulting image.</p>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>new_region</code></strong> :&ensp;<code>np.ndarray</code></dt>
-<dd>The new region to be infered. Shape in [self.w, self.h, c].</dd>
+<dd>The new region to be infered. Shape in [bs, self.w, self.h, c].</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
 <dt><code>np.ndarray</code></dt>
-<dd>Full-sized image with 'new_region' at [self.x, self.y] (upper-left).</dd>
+<dd>Batch of full-sized images with 'new_region' at [self.x, self.y] (upper-left).</dd>
 </dl></div>
 <details class="source">
 <summary>
@@ -272,21 +335,15 @@ the parsed one in 'new_region' and returns the resulting image.</p>
         the parsed one in &#39;new_region&#39; and returns the resulting image.
 
     Args:
-        new_region (np.ndarray): The new region to be infered. Shape in [self.w, self.h, c].
+        new_region (np.ndarray): The new region to be infered. Shape in [bs, self.w, self.h, c].
 
     Returns:
-        np.ndarray: Full-sized image with &#39;new_region&#39; at [self.x, self.y] (upper-left).
+        np.ndarray: Batch of full-sized images with &#39;new_region&#39; at [self.x, self.y] (upper-left).
     &#34;&#34;&#34;
-    assert (
-        new_region.shape[0] == self.target[&#34;w&#34;] and new_region.shape[1] == self.target[&#34;h&#34;]
-    ), &#34;Parsed region is of different size compared to the target region&#34;
-
-    tmp_image = self.orig_img.copy()
-    tmp_image[
-        self.target[&#34;x&#34;] : self.target[&#34;x&#34;] + self.target[&#34;w&#34;],
-        self.target[&#34;y&#34;] : self.target[&#34;y&#34;] + self.target[&#34;h&#34;],
-    ] = new_region
-    return tmp_image</code></pre>
+    if new_region.ndim &lt; 4:
+        return self.nonbatched_replacement(new_region)
+    else:
+        return self.batched_replacement(new_region)</code></pre>
 </details>
 </dd>
 </dl>
@@ -321,7 +378,9 @@ the parsed one in 'new_region' and returns the resulting image.</p>
 <li>
 <h4><code><a title="maxi.lib.inference.processing.SelectiveRegionProcessor" href="#maxi.lib.inference.processing.SelectiveRegionProcessor">SelectiveRegionProcessor</a></code></h4>
 <ul class="">
+<li><code><a title="maxi.lib.inference.processing.SelectiveRegionProcessor.batched_replacement" href="#maxi.lib.inference.processing.SelectiveRegionProcessor.batched_replacement">batched_replacement</a></code></li>
 <li><code><a title="maxi.lib.inference.processing.SelectiveRegionProcessor.check_sizes" href="#maxi.lib.inference.processing.SelectiveRegionProcessor.check_sizes">check_sizes</a></code></li>
+<li><code><a title="maxi.lib.inference.processing.SelectiveRegionProcessor.nonbatched_replacement" href="#maxi.lib.inference.processing.SelectiveRegionProcessor.nonbatched_replacement">nonbatched_replacement</a></code></li>
 <li><code><a title="maxi.lib.inference.processing.SelectiveRegionProcessor.postprocess" href="#maxi.lib.inference.processing.SelectiveRegionProcessor.postprocess">postprocess</a></code></li>
 <li><code><a title="maxi.lib.inference.processing.SelectiveRegionProcessor.preprocess" href="#maxi.lib.inference.processing.SelectiveRegionProcessor.preprocess">preprocess</a></code></li>
 <li><code><a title="maxi.lib.inference.processing.SelectiveRegionProcessor.target" href="#maxi.lib.inference.processing.SelectiveRegionProcessor.target">target</a></code></li>

@@ -71,7 +71,10 @@ def intensify_pixels(image: np.ndarray, max_value: int = 255) -&gt; np.ndarray:
     reduced_mean = image - image.mean()
     reduced_min = reduced_mean - reduced_mean.min()
     divided_max = reduced_min / reduced_min.max()
-    return divided_max * max_value</code></pre>
+    return divided_max * max_value
+
+def rescale_image_to_0_255(arr):
+    return ((arr - arr.min()) * (1/(arr.max() - arr.min()) * 255)).astype(&#39;uint8&#39;)</code></pre>
 </details>
 </section>
 <section>
@@ -126,6 +129,19 @@ def intensify_pixels(image: np.ndarray, max_value: int = 255) -&gt; np.ndarray:
         np.ndarray: Normalized image
     &#34;&#34;&#34;
     return (image - image.mean()) / image.max()</code></pre>
+</details>
+</dd>
+<dt id="maxi.utils.transformations.rescale_image_to_0_255"><code class="name flex">
+<span>def <span class="ident">rescale_image_to_0_255</span></span>(<span>arr)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def rescale_image_to_0_255(arr):
+    return ((arr - arr.min()) * (1/(arr.max() - arr.min()) * 255)).astype(&#39;uint8&#39;)</code></pre>
 </details>
 </dd>
 <dt id="maxi.utils.transformations.reverse_normalize"><code class="name flex">
@@ -196,6 +212,7 @@ def intensify_pixels(image: np.ndarray, max_value: int = 255) -&gt; np.ndarray:
 <ul class="">
 <li><code><a title="maxi.utils.transformations.intensify_pixels" href="#maxi.utils.transformations.intensify_pixels">intensify_pixels</a></code></li>
 <li><code><a title="maxi.utils.transformations.normalize" href="#maxi.utils.transformations.normalize">normalize</a></code></li>
+<li><code><a title="maxi.utils.transformations.rescale_image_to_0_255" href="#maxi.utils.transformations.rescale_image_to_0_255">rescale_image_to_0_255</a></code></li>
 <li><code><a title="maxi.utils.transformations.reverse_normalize" href="#maxi.utils.transformations.reverse_normalize">reverse_normalize</a></code></li>
 <li><code><a title="maxi.utils.transformations.rgb2gray" href="#maxi.utils.transformations.rgb2gray">rgb2gray</a></code></li>
 </ul>

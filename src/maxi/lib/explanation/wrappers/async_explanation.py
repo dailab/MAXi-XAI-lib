@@ -72,12 +72,11 @@ class AsyncExplanationWrapper:
                 try:
                     inference_call = inference_calls[key]
                     meta_data = _meta_data[key] if _meta_data else {}
-                except KeyError:
+                except KeyError as e:
                     raise KeyError(
-                        f"Couldn't retrieve the inference method or meta data for the {i}th image in the list. "
-                        "Make sure that the dictionary is keyed by the string byte presentation of the array. \n"
-                        "[You can get it by calling: *image_matrix*.tobytes() ]"
-                    )
+                        f"Couldn't retrieve the inference method or meta data for the {i}th image in the list. " 
+                        "Make sure that the dictionary is keyed by the string byte presentation of the array. \n" 
+                        "[You can get it by calling: *image_matrix*.tobytes() ]") from e
 
                 future_to_bytes[
                     executor.submit(
