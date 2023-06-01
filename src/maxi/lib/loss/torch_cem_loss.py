@@ -1,14 +1,14 @@
 """[Torch] CEM Loss Function Module"""
-from typing import Tuple, List, Callable
+from typing import Callable, Union
 
 import numpy as np
 import torch
 from torch.linalg import norm
 
-from .cem_loss import CEMLoss
-from ..computation_components.gradient import Torch_Gradient
 from ...data.data_types import InferenceCall
 from ...utils import loss_utils
+from ..computation_components.gradient import Torch_Gradient
+from .cem_loss import CEMLoss
 
 
 class Torch_CEMLoss(CEMLoss):
@@ -18,6 +18,7 @@ class Torch_CEMLoss(CEMLoss):
         org_img: np.ndarray,
         inference: InferenceCall,
         gamma: float,
+        device: str = "cpu",
         K: float = 1.0,
         c: float = 1.0,
         AE: Callable[[np.ndarray], np.ndarray] = None,
@@ -40,6 +41,7 @@ class Torch_CEMLoss(CEMLoss):
                 interpretable representation of the underlying prediction, e.g. a binary vector indicating \
                 the “presence” or “absence”.
             c (float): $$f_K$$ regularization coefficient.
+            device (str, optional): Computation device. Defaults to "cpu".
             gamma (float): Regularization coefficient for the autoencoder term.
             K (float): Confidence parameter for seperation between probability of target and non-target value.
             AE (Callable[[ndarray], ndarray]): Autoencoder, if None disregard AE error term.
@@ -58,22 +60,23 @@ class Torch_CEMLoss(CEMLoss):
             Torch's automatic differentiation on this class' methods, the model must be implemented in Torch as well.
         """
         self.compatible_grad_methods += [Torch_Gradient]
+        self.device = device
         super().__init__(
             mode=mode,
-            org_img=torch.tensor(org_img, dtype=torch.float32),
+            org_img=torch.tensor(org_img, dtype=torch.float32, device=self.device),
             inference=inference,
-            c=torch.tensor(c, dtype=torch.float32),
-            gamma=torch.tensor(gamma, dtype=torch.float32),
-            K=torch.tensor(K, dtype=torch.float32),
+            c=torch.tensor(c, dtype=torch.float32, device=self.device),
+            gamma=torch.tensor(gamma, dtype=torch.float32, device=self.device),
+            K=torch.tensor(K, dtype=torch.float32, device=self.device),
             AE=AE,
             lower=lower,
             upper=upper,
             channels_first=channels_first,
         )
         if hasattr(self, "pn_target") and type(self.pn_target) is np.ndarray:
-            self.pn_target = torch.tensor(self.pn_target, dtype=torch.float32)
+            self.pn_target = torch.tensor(self.pn_target, dtype=torch.float32, device=self.device)
 
-    def get_target_idx(self, org_img: torch.Tensor) -> torch.int64:
+    def get_target_idx(self, org_img: np.ndarray) -> torch.int64:
         """Retrieves index of the originally classified class in the inference result
 
         Args:
@@ -85,10 +88,8 @@ class Torch_CEMLoss(CEMLoss):
         res = self.inference(org_img)
         assert res.ndim == 2, "Inference result has to be a two dimensional array"
         assert len(res[0]) >= 2, "Inference result has to represent at least two states"
-        assert (
-            len(res) == 1
-        ), "Loss class currently does not support batched calculations"
-        return torch.argmax(res) if type(res) is torch.Tensor else np.argmax(res)
+        assert len(res) == 1, "Loss class currently does not support batched calculations"
+        return torch.argmax(res)
 
     def PN(self, delta: np.ndarray) -> torch.Tensor:
         """_Pertinent negative_ Loss Function
@@ -123,15 +124,17 @@ class Torch_CEMLoss(CEMLoss):
         """
         return super().PN_smooth(delta)
 
-    def PP_smooth(self, delta: np.ndarray) -> torch.Tensor:
+    def PP_smooth(self, delta: Union[torch.tensor, np.ndarray]) -> torch.Tensor:
         """_Smooth Pertinent Positive_ Loss Function
 
         Args:
-            delta (np.ndarray): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
+            delta (Union[torch.tensor, np.ndarray]): Perturbation matrix in [bs, width, height, channels] or [bs, channels, width, height].
 
         Returns:
             torch.Tensor: PP loss value(s), 2D tensor of shape (bs, 1).
         """
+        if isinstance(delta, np.ndarray):
+            delta = torch.tensor(delta, dtype=torch.float32, device=self.device)
         return super().PP_smooth(delta)
 
     def f_K_neg(self, delta: torch.Tensor) -> torch.Tensor:
@@ -207,6 +210,7 @@ class Torch_CEMLoss(CEMLoss):
         Returns:
             torch.Tensor: positive f_K term loss value, 2D tensor of shape (bs, 1).
         """
+        # TODO we don't we add the image here?
         pred = self.inference(delta)
         attack_value = loss_utils.torch_extract_nontarget_proba(
             pred, self.target
@@ -229,9 +233,7 @@ class Torch_CEMLoss(CEMLoss):
         if not self.AE:
             return 0.0
         adv_img = self.org_img + delta
-        return (
-            norm(norm(adv_img - self.AE(adv_img), axis=self._c_dim), axis=(-2, -1)) ** 2
-        )
+        return norm(norm(adv_img - self.AE(adv_img), axis=self._c_dim), axis=(-2, -1)) ** 2
 
     def PP_AE_error(self, delta: torch.Tensor) -> torch.Tensor:
         """Autoencoder error term for the Pertinent Positive

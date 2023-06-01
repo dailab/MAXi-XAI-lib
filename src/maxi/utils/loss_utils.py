@@ -1,4 +1,5 @@
 from typing import Tuple
+
 import numpy as np
 import tensorflow as tf
 import torch
@@ -143,9 +144,7 @@ def tf_extract_nontarget_proba(P: tf.Tensor, t: int) -> tf.Tensor:
     return tf.squeeze(tf.math.top_k(P_wo_target, 1)[0], axis=1)
 
 
-def torch_extract_prob(
-    P: Tuple[torch.Tensor, np.ndarray], t: int, non_target: bool
-) -> float:
+def torch_extract_prob(P: Tuple[torch.Tensor, np.ndarray], t: int, non_target: bool) -> float:
     """PyTorch method to extract the targets predicted value or the next highest value
 
     Args:
@@ -184,19 +183,13 @@ def torch_extract_target_proba(P: torch.Tensor, t: int) -> torch.Tensor:
     Returns:
         tf.Tensor: Prediction score for target class
     """
-    if P.ndim not in [1, 2]:
-        raise ValueError("Got logits matrix of dimension larger than 2")
+    if P.ndim != 2:
+        raise ValueError(f"Prediction should have dimension 2, but got {P.ndim}")
 
-    if P.ndim == 1:
-        return P[t]
-
-    target_vector = torch.zeros(len(P), dtype=torch.float32)
-    for i in range(len(P)):
-        target_vector[i] = torch_extract_target_proba(P[i], t)
-    return target_vector
+    return P[:, t]
 
 
-def torch_extract_nontarget_proba(P: torch.Tensor, t: int) -> torch.Tensor:
+def torch_extract_nontarget_proba(P: torch.Tensor, t: torch.int64) -> torch.Tensor:
     """PyTorch method to extract the highest non-target's probability
 
     Args:
@@ -209,18 +202,16 @@ def torch_extract_nontarget_proba(P: torch.Tensor, t: int) -> torch.Tensor:
     Returns:
         tf.Tensor: Prediction score for hightest non-target class
     """
-    if P.ndim not in [1, 2]:
-        raise ValueError("Got logits matrix of dimension larger than 2")
+    if P.ndim != 2:
+        raise ValueError(f"Prediction should have dimension 2, but got {P.ndim}")
+    if t < 0 or t >= P.shape[1]:
+        raise ValueError(f"Target index {t} is out of bounds: [0, {P.shape[1]})")
 
-    if P.ndim == 1:
-        for index in torch.topk(P, 2, dim=-1).indices:
-            if index != t:
-                return P[index]
-
-    prob_vector = torch.zeros(len(P), dtype=torch.float32)
-    for i in range(len(P)):
-        prob_vector[i] = torch_extract_nontarget_proba(P[i], t)
-    return prob_vector
+    P_before_t = P[:, :t]
+    P_after_t = P[:, t + 1 :]
+    P_without_t = torch.cat((P_before_t, P_after_t), dim=1)
+    P_max, _ = torch.max(P_without_t, dim=1)
+    return P_max
 
 
 def generate_from_gaussian(data: np.ndarray) -> np.ndarray:

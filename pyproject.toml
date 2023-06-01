@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "maxi"
-version = "0.4.4"
+version = "0.4.5"
 description = "Model-Agnostic Explanation Library"
 authors = ["Tuan Anh, Le <tuananh.le@dai-labor.de>"]
 license = "MIT"
