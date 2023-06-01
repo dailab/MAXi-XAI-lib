@@ -13,6 +13,8 @@ For developers, it is suggested that you take a look at the Python documentation
 - [Model-Agnostic Explanation Library (MAX Lib)](#model-agnostic-explanation-library-max-lib)
   - [Table of Contents](#table-of-contents)
   - [Installation](#installation)
+    - [Non-local Installation](#non-local-installation)
+    - [Local Installation](#local-installation)
   - [Components](#components)
     - [Loss Package (Explanation Models)](#loss-package-explanation-models)
     - [Inference Package](#inference-package)
@@ -45,11 +47,31 @@ For installation, it is necessary to have the package manager _Poetry_ and _Pyth
 
 **Package Installation**
 
+#### Non-local Installation
+
+Source your desired python environment and install _MAXi_ via:
+
+- Pip
+
+```shell
+pip install git+https://github.com/dailab/MAXi-XAI-lib.git
+```
+
+- Poetry
+
+```shell
+poetry add git+https://github.com/dailab/MAXi-XAI-lib.git
+```
+
+#### Local Installation
+
+Alternatively, if you intend on modifying _MAXi_-lib locally, these steps are necessary:
+
 1. Navigate to the desired destination directory.
 2. Clone the repository:
 
 ```bash
-git clone https://gitlab.dai-labor.de/empaia/constrastive-explaination-prototype.git
+git clone https://github.com/dailab/MAXi-XAI-lib.git
 ```
 
 3. Now, either install the package in an exclusive python environment:
@@ -190,4 +212,5 @@ The Explanation Generator interconnects all the above mentioned components and i
 [Click here](docs/md/tutorials/explanation_model_example.md)
 
 <!-- ![Activity Diagram](docs/img/mael_activity_diagram.png) -->
-This open source project is funded by the German Federal Ministry for Economic Affairs and Climate Action as part of the EMPAIA project under Grant Agreement No. 01MK20002C.  
+
+This open source project is funded by the German Federal Ministry for Economic Affairs and Climate Action as part of the EMPAIA project under Grant Agreement No. 01MK20002C.
