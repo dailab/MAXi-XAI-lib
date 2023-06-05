@@ -1,13 +1,13 @@
 """SKImage WatershedHandler class to handle watershed segmentation."""
 from typing import List
-from maxi.lib.image_segmentation.base_seg_handler import BaseSegmentationHandler
 
-# import the necessary packages
+import cv2
+import numpy as np
+from scipy import ndimage
 from skimage.feature import peak_local_max
 from skimage.segmentation import watershed
-from scipy import ndimage
-import numpy as np
-import cv2
+
+from maxi.lib.image_segmentation.base_seg_handler import BaseSegmentationHandler
 
 
 class WatershedHandler(BaseSegmentationHandler):
@@ -56,9 +56,7 @@ class WatershedHandler(BaseSegmentationHandler):
         """
         # load the image and perform pyramid mean shift filtering
         # to aid the thresholding step
-        image = cv2.normalize(
-            img, img, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F
-        )
+        image = cv2.normalize(img, img, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
 
         norm_image = np.zeros(image.shape)
         norm_image = cv2.normalize(
