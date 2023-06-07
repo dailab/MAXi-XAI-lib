@@ -6,7 +6,7 @@ cachetools==4.2.4; python_version >= "3.5" and python_version < "4.0" and (pytho
 certifi==2022.12.7; python_version >= "3.6" and python_full_version < "3.0.0" or python_full_version >= "3.6.0" and python_version >= "3.6"
 charset-normalizer==2.0.8; python_full_version >= "3.6.0" and python_version >= "3.6"
 click==8.0.3; python_version >= "3.6" and python_full_version >= "3.6.2"
-colorama==0.4.4; python_version >= "3.6" and python_full_version >= "3.6.2" and platform_system == "Windows"
+colorama==0.4.6; python_version >= "3.6" and python_full_version >= "3.6.2" and platform_system == "Windows"
 cycler==0.11.0; python_version >= "3.7"
 easydict==1.9
 flatbuffers==2.0
