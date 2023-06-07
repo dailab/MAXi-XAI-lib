@@ -46,7 +46,7 @@ platformdirs==2.4.0; python_version >= "3.6" and python_full_version >= "3.6.2"
 protobuf==3.19.5; python_version >= "3.6"
 pyasn1-modules==0.2.8; python_version >= "3.6" and python_full_version < "3.0.0" or python_full_version >= "3.6.0" and python_version >= "3.6"
 pyasn1==0.4.8; python_version >= "3.6" and python_full_version < "3.0.0" and python_version < "4" and (python_version >= "3.6" and python_full_version < "3.0.0" or python_full_version >= "3.6.0" and python_version >= "3.6") or python_full_version >= "3.6.0" and python_version >= "3.6" and python_version < "4" and (python_version >= "3.6" and python_full_version < "3.0.0" or python_full_version >= "3.6.0" and python_version >= "3.6")
-pyparsing==3.0.6; python_version >= "3.7"
+pyparsing==3.0.9; python_version >= "3.7"
 python-dateutil==2.8.2; python_version >= "3.7" and python_full_version < "3.0.0" or python_full_version >= "3.3.0" and python_version >= "3.7"
 pywavelets==1.2.0; python_version >= "3.7"
 pyyaml==5.4.1; (python_version >= "2.7" and python_full_version < "3.0.0") or (python_full_version >= "3.6.0")
