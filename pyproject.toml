@@ -7,7 +7,6 @@ license = "MIT"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<3.12"
-easydict = "^1.9"
 pyyaml = "^6.0"
 matplotlib = "^3.4.2"
 numba = "^0.57.0"
