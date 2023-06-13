@@ -1,7 +1,4 @@
 """Identity Quantizer Method"""
-from typing import Any
-from nptyping import NDArray
-
 import numpy as np
 
 from .base_quantizer import BaseQuantizer
@@ -15,13 +12,13 @@ class IdentityMethod(BaseQuantizer):
         """
         super().__init__()
 
-    def __call__(self, prediction: np.ndarray, *args, **kwargs) -> NDArray[Any]:
+    def __call__(self, prediction: np.ndarray, *args, **kwargs) -> np.ndarray:
         """Returns the resulting annotation as it is.
 
         Args:
             prediction (np.ndarray): Arbitrary prediction.
 
         Returns:
-            NDArray[Any]: The same arbitrary prediction from the input.
+            ndarray[Any]: The same arbitrary prediction from the input.
         """
         return super().__call__(prediction)

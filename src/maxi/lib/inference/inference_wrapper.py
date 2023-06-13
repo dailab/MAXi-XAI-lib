@@ -44,9 +44,9 @@ class InferenceWrapper:
             quantizer method.
 
         Args:
-            img (NDArray[Int]): Image data in [width, height, channels]
+            img (ndarray[Int]): Image data in [width, height, channels]
 
         Returns:
-            NDArray[Float]: Array containing a valued class distribution, N entries for N classes. 
+            ndarray[Float]: Array containing a valued class distribution, N entries for N classes. 
         """
         return self.quantizer(self.inference_model(self.preprocess(img)))
