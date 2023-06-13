@@ -11,10 +11,10 @@ pyyaml = "^6.0"
 matplotlib = "^3.4.2"
 numba = "^0.57.0"
 opencv-python = "^4.5.4"
-scikit-image = "^0.18.3"
+scikit-image = "^0.21.0"
 torch = "^2.0.1"
 numpy = "^1.19.0"
-nptyping = "^1.4.4"
+nptyping = "^2.0.0"
 torchvision = "^0.15.2"
 tensorflow = "^2.12.0"
 
@@ -22,7 +22,7 @@ tensorflow = "^2.12.0"
 black = "^21.11b1"
 pdoc3 = "^0.10.0"
 jupyter = "^1.0.0"
-ipython = "<8.13.0"
+ipython = "<8.14.1"
 
 
 [build-system]
