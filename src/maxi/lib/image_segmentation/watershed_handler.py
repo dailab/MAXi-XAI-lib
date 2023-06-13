@@ -4,10 +4,13 @@ from typing import List
 import cv2
 import numpy as np
 from scipy import ndimage
-from skimage.feature import peak_local_max
-from skimage.segmentation import watershed
 
-from maxi.lib.image_segmentation.base_seg_handler import BaseSegmentationHandler
+# import the necessary packages
+from skimage.feature import peak_local_max
+from skimage.morphology import watershed
+from scipy import ndimage
+import numpy as np
+import cv2
 
 
 class WatershedHandler(BaseSegmentationHandler):
