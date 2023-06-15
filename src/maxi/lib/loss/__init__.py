@@ -4,4 +4,6 @@ from .cem_loss import CEMLoss
 from .lime_loss import LimeLoss
 from .tf_cem_loss import TF_CEMLoss
 from .torch_cem_loss import Torch_CEMLoss
+from .sim_desim_loss import SimDesimLoss
+from .torch_sim_desim_loss import Torch_SimDesimLoss
 from .segmentation_loss import *
