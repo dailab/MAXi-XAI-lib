@@ -689,6 +689,14 @@ MarkupSafe = ">=2.0"
 i18n = ["Babel (>=2.7)"]
 
 [[package]]
+name = "joblib"
+version = "1.2.0"
+description = "Lightweight pipelining with Python functions"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[[package]]
 name = "jsonpointer"
 version = "2.3"
 description = "Identify specific nodes in a JSON document (RFC 6901)"
@@ -897,18 +905,6 @@ description = "A fast implementation of the Cassowary constraint solver"
 category = "main"
 optional = false
 python-versions = ">=3.7"
-
-[[package]]
-name = "lazy-loader"
-version = "0.2"
-description = "lazy_loader"
-category = "main"
-optional = false
-python-versions = ">=3.7"
-
-[package.extras]
-lint = ["pre-commit (>=3.1)"]
-test = ["pytest (>=7.2)", "pytest-cov (>=4.0)"]
 
 [[package]]
 name = "libclang"
@@ -1690,45 +1686,47 @@ pyasn1 = ">=0.1.3"
 
 [[package]]
 name = "scikit-image"
-version = "0.20.0"
+version = "0.18.3"
 description = "Image processing in Python"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+imageio = ">=2.3.0"
+matplotlib = ">=2.0.0,<3.0.0 || >3.0.0"
+networkx = ">=2.0"
+numpy = ">=1.16.5"
+pillow = ">=4.3.0,<7.1.0 || >7.1.0,<7.1.1 || >7.1.1"
+PyWavelets = ">=1.1.1"
+scipy = ">=1.0.1"
+tifffile = ">=2019.7.26"
+
+[package.extras]
+data = ["pooch (>=1.3.0)"]
+docs = ["sphinx (>=1.8,<=2.4.4)", "sphinx-gallery (>=0.7.0,!=0.8.0)", "numpydoc (>=1.0)", "sphinx-copybutton", "pytest-runner", "scikit-learn", "matplotlib (>=3.0.1)", "dask[array] (>=0.15.0,!=2.17.0)", "cloudpickle (>=0.2.1)", "pandas (>=0.23.0)", "seaborn (>=0.7.1)", "pooch (>=1.3.0)", "tifffile (>=2020.5.30)", "myst-parser", "ipywidgets", "plotly (>=4.10.0)"]
+optional = ["simpleitk", "astropy (>=3.1.2)", "qtpy", "pyamg", "dask[array] (>=1.0.0,!=2.17.0)", "cloudpickle (>=0.2.1)", "pooch (>=1.3.0)"]
+test = ["pytest (>=5.2.0)", "pytest-cov (>=2.7.0)", "pytest-localserver", "pytest-faulthandler", "flake8", "codecov", "pooch (>=1.3.0)"]
+
+[[package]]
+name = "scikit-learn"
+version = "1.2.2"
+description = "A set of python modules for machine learning and data mining"
 category = "main"
 optional = false
 python-versions = ">=3.8"
 
 [package.dependencies]
-imageio = ">=2.4.1"
-lazy_loader = ">=0.1"
-networkx = ">=2.8"
-numpy = ">=1.21.1"
-packaging = ">=20.0"
-pillow = ">=9.0.1"
-PyWavelets = ">=1.1.1"
-scipy = [
-    {version = ">=1.8,<1.9.2", markers = "python_version <= \"3.9\""},
-    {version = ">=1.8", markers = "python_version > \"3.9\""},
-]
-tifffile = ">=2019.7.26"
+joblib = ">=1.1.1"
+numpy = ">=1.17.3"
+scipy = ">=1.3.2"
+threadpoolctl = ">=2.0.0"
 
 [package.extras]
-build = ["meson-python (>=0.13.0rc0)", "wheel", "setuptools (>=67)", "packaging (>=20)", "ninja", "Cython (>=0.29.24)", "pythran", "numpy (>=1.21.1)", "build"]
-data = ["pooch (>=1.3.0)"]
-default = ["numpy (>=1.21.1)", "scipy (>=1.8,<1.9.2)", "scipy (>=1.8)", "networkx (>=2.8)", "pillow (>=9.0.1)", "imageio (>=2.4.1)", "tifffile (>=2019.7.26)", "PyWavelets (>=1.1.1)", "packaging (>=20.0)", "lazy_loader (>=0.1)"]
-developer = ["pre-commit", "rtoml"]
-docs = ["sphinx (>=5.2)", "sphinx-gallery (>=0.11)", "numpydoc (>=1.5)", "sphinx-copybutton", "pytest-runner", "scikit-learn", "matplotlib (>=3.6)", "dask[array] (>=2022.9.2)", "pandas (>=1.5)", "seaborn (>=0.11)", "pooch (>=1.6)", "tifffile (>=2022.8.12)", "myst-parser", "ipywidgets", "plotly (>=5.10)", "kaleido"]
-optional = ["simpleitk", "astropy (>=3.1.2)", "cloudpickle (>=0.2.1)", "dask[array] (>=1.0.0,!=2.17.0)", "matplotlib (>=3.3)", "pooch (>=1.3.0)", "pyamg"]
-test = ["asv", "codecov", "matplotlib (>=3.3)", "pooch (>=1.3.0)", "pytest (>=5.2.0)", "pytest-cov (>=2.7.0)", "pytest-localserver", "pytest-faulthandler"]
-
-[[package]]
-name = "scipy"
-version = "1.9.1"
-description = "SciPy: Scientific Library for Python"
-category = "main"
-optional = false
-python-versions = ">=3.8,<3.12"
-
-[package.dependencies]
-numpy = ">=1.18.5,<1.25.0"
+benchmark = ["matplotlib (>=3.1.3)", "pandas (>=1.0.5)", "memory-profiler (>=0.57.0)"]
+docs = ["matplotlib (>=3.1.3)", "scikit-image (>=0.16.2)", "pandas (>=1.0.5)", "seaborn (>=0.9.0)", "memory-profiler (>=0.57.0)", "sphinx (>=4.0.1)", "sphinx-gallery (>=0.7.0)", "numpydoc (>=1.2.0)", "Pillow (>=7.1.2)", "pooch (>=1.6.0)", "sphinx-prompt (>=1.3.0)", "sphinxext-opengraph (>=0.4.2)", "plotly (>=5.10.0)"]
+examples = ["matplotlib (>=3.1.3)", "scikit-image (>=0.16.2)", "pandas (>=1.0.5)", "seaborn (>=0.9.0)", "pooch (>=1.6.0)", "plotly (>=5.10.0)"]
+tests = ["matplotlib (>=3.1.3)", "scikit-image (>=0.16.2)", "pandas (>=1.0.5)", "pytest (>=5.3.1)", "pytest-cov (>=2.9.0)", "flake8 (>=3.8.2)", "black (>=22.3.0)", "mypy (>=0.961)", "pyamg (>=4.0.0)", "numpydoc (>=1.2.0)", "pooch (>=1.6.0)"]
 
 [[package]]
 name = "scipy"
@@ -1938,6 +1936,14 @@ docs = ["myst-parser", "pydata-sphinx-theme", "sphinx"]
 test = ["pre-commit", "pytest-timeout", "pytest (>=7.0)"]
 
 [[package]]
+name = "threadpoolctl"
+version = "3.1.0"
+description = "threadpoolctl"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[[package]]
 name = "tifffile"
 version = "2023.4.12"
 description = "Read and write TIFF files"
@@ -1994,17 +2000,18 @@ opt-einsum = ["opt-einsum (>=3.3)"]
 
 [[package]]
 name = "torchvision"
-version = "0.15.2"
+version = "0.12.0"
 description = "image and video datasets and models for torch deep learning"
 category = "main"
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.7"
 
 [package.dependencies]
 numpy = "*"
 pillow = ">=5.3.0,<8.3.0 || >=8.4.0"
 requests = "*"
-torch = "2.0.1"
+torch = "*"
+typing-extensions = "*"
 
 [package.extras]
 scipy = ["scipy"]
@@ -2115,7 +2122,7 @@ test = ["websockets"]
 
 [[package]]
 name = "werkzeug"
-version = "2.3.4"
+version = "2.3.5"
 description = "The comprehensive WSGI web application library."
 category = "main"
 optional = false
@@ -2158,7 +2165,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "flake8 (<5)", "pytest-co
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8,<3.12"
-content-hash = "7dc9488b84f863332a1f896050fd27957a708382408264ce2922ee5304ff8e65"
+content-hash = "9ce378289e444f8c9de0f7bee66181f74aa546e16aee601b4fa27dd0faea9358"
 
 [metadata.files]
 absl-py = []
@@ -2211,6 +2218,7 @@ isoduration = []
 jax = []
 jedi = []
 jinja2 = []
+joblib = []
 jsonpointer = []
 jsonschema = []
 jupyter = []
@@ -2224,7 +2232,6 @@ jupyterlab-pygments = []
 jupyterlab-widgets = []
 keras = []
 kiwisolver = []
-lazy-loader = []
 libclang = []
 llvmlite = []
 mako = []
@@ -2288,6 +2295,7 @@ rfc3339-validator = []
 rfc3986-validator = []
 rsa = []
 scikit-image = []
+scikit-learn = []
 scipy = []
 send2trash = []
 setuptools-scm = []
@@ -2303,6 +2311,7 @@ tensorflow-estimator = []
 tensorflow-io-gcs-filesystem = []
 termcolor = []
 terminado = []
+threadpoolctl = []
 tifffile = []
 tinycss2 = []
 tomli = []
