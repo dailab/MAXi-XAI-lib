@@ -75,4 +75,4 @@ class Torch_SimDesimLoss(SimDesimLoss):
     def get_dissimilarity_val(
         first_data: th.Tensor, second_data: th.Tensor
     ) -> th.Tensor:
-        return th.linalg.norm(first_data - second_data)
+        return -th.linalg.norm(first_data - second_data)
