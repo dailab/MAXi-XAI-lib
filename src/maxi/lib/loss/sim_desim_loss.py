@@ -11,8 +11,8 @@ from maxi.lib.computation_components import URVGradientEstimator, USRVGradientEs
 
 class SimDesimLoss(BaseExplanationModel):
     compatible_grad_methods = [URVGradientEstimator, USRVGradientEstimator]
-    # _x0_generator = lambda x: x
-    _x0_generator = lambda x: np.full(x.shape, 0)
+    _x0_generator = lambda x: x
+    # _x0_generator = lambda x: np.full(x.shape, 0)
 
     def __init__(
         self,
