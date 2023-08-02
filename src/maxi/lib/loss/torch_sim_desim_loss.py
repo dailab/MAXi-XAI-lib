@@ -55,7 +55,7 @@ class Torch_SimDesimLoss(SimDesimLoss):
     def get_loss(self, data: th.Tensor, *args, **kwargs) -> float:
         if not th.is_tensor(data):
             data = th.tensor(data, device=self.device, dtype=th.float32)
-        perturbed_pred = self.inference(self.org_img + data)
+        perturbed_pred: th.Tensor = self.inference(self.org_img + data)
         perturbed_pred_wo_target = th.masked_select(perturbed_pred, self.mask)
         return Torch_SimDesimLoss.get_similarity_val(
             rbf_kernel,
