@@ -24,7 +24,7 @@ def get_heatmap(
         np.ndarray: Heatmap in color range 'COLORMAP_JET'.
     """
     map_img = np.uint8(mask)
-    return cv2.applyColorMap(map_img, cv2.COLORMAP_JET)
+    return cv2.applyColorMap(map_img, cv2.COLORMAP_HOT)
 
 
 def transform_res2heatmap(
