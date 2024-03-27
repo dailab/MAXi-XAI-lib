@@ -6,23 +6,23 @@ authors = ["Tuan Anh, Le <tuananh.le@dai-labor.de>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.12"
+python = ">=3.12,<3.13"
 pyyaml = "^6.0"
 matplotlib = "^3.4.2"
-numba = "^0.57.0"
+numba = "^0.59.0"
 opencv-python = "^4.5.4"
-scikit-image = "^0.21.0"
+scikit-image = "^0.22.0"
 torch = "^2.0.1"
 numpy = "^1.19.0"
 nptyping = "^2.0.0"
-torchvision = "^0.15.2"
+torchvision = "^0.17.0"
 tensorflow = "^2.12.0"
 
 [tool.poetry.dev-dependencies]
 black = "^21.11b1"
 pdoc3 = "^0.10.0"
 jupyter = "^1.0.0"
-ipython = "<8.14.1"
+ipython = "<8.22.3"
 
 
 [build-system]
